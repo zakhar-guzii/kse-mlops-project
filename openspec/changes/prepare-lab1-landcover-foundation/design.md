@@ -2,182 +2,188 @@
 
 ## Context
 
-Мотивація та межа change наведені в [proposal.md](proposal.md). Цей документ є planning artifact OpenSpec; `docs/design.md` та каркас Lab 1 будуть створені лише під час окремого apply.
+The motivation and change boundary are in [proposal.md](proposal.md). This document is the OpenSpec planning artifact for Lab 1; apply creates the standalone course design and repository tooling.
 
-Головне джерело вимог — [docs/lab-1.pdf](../../../docs/lab-1.pdf), с. 2–5, додатки 2–3. SHA-256 перевіреного PDF: `f0d245992c4bb3813da0f9dacb05d8c14307587d70741ab6d570d508ceaf2279`. Вихідний commit — `d2b0800`; перед propose working tree був чистим. README порожній; Python constraint — `>=3.12`; залежностей немає; uv.lock містить лише початковий проєкт. Design, Makefile, pre-commit та CI відсутні; активних changes і capability specs до цієї роботи не було.
+The main requirements source is [docs/lab-1.pdf](../../../docs/lab-1.pdf), pages 2–5 and appendices 2–3. The inspected PDF SHA-256 is `f0d245992c4bb3813da0f9dacb05d8c14307587d70741ab6d570d508ceaf2279`. The initial inspected commit was `d2b0800`, with a clean working tree before propose. At that point README was empty, the Python constraint was `>=3.12`, no dependencies were declared, uv.lock contained only the initial project, and design/Makefile/pre-commit/CI were absent. There were no active changes or capability specs before this work.
 
-### Факти, прочитані з машини 2026-10-22
+### Facts read from the machine on 2026-10-22
 
-| Параметр | Фактичне значення | Метод / межа перевірки |
+| Parameter | Observed value | Method / verification boundary |
 |---|---|---|
 | Host | Apple M4 Pro, Mac16,7, arm64 | `sysctl`, `uname -m` |
-| CPU | 14 доступних CPU-ядер | `hw.ncpu`; завантаження й швидкість inference не виміряні |
-| RAM | 25 769 803 776 bytes = 24 GiB | `hw.memsize`; це RAM host, не Docker VM allocation |
+| CPU | 14 available CPU cores | `hw.ncpu`; load and inference speed were not measured |
+| RAM | 25,769,803,776 bytes = 24 GiB | `hw.memsize`; host RAM, not Docker VM allocation |
 | OS | macOS 26.6.2, build 25G83 | `sw_vers` |
-| Доступний диск volume | приблизно 204.18 GiB | `df -k .`; моментальний стан, не квота проєкту |
-| Системний Python | 3.14.6 | `python3 --version`; не прийнятий автоматично як ML runtime |
+| Available volume space | Approximately 204.18 GiB | `df -k .`; a point-in-time value, not a project quota |
+| System Python | 3.14.6 | `python3 --version`; not automatically selected as the ML runtime |
 | uv | 0.11.21 | `uv --version` |
-| Docker CLI | 29.5.2 | `docker --version`; daemon і ліміти Docker VM не перевірені |
-| Minikube | команда не знайдена в PATH | кластер не запускався |
-| Модель / дані / corpus snapshots | не завантажені й не запускалися | немає замірів mIoU, inference latency, peak RAM або GPU time |
+| Docker CLI | 29.5.2 | `docker --version`; daemon and VM limits not checked |
+| Minikube | Command not found in PATH | No cluster launch |
+| Model / data / corpus snapshots | Not downloaded or executed | No mIoU, inference-latency, peak-RAM, or GPU-time measurements |
 
-Позначення нижче: **погоджено** — рішення користувача; **припущення** — запропонований параметр дизайну; **не перевірено** — потрібні bytes, запуск або зовнішнє підтвердження. Показники 1 хв / 5 хв з раннього обговорення відкликані та не є вимогами.
+Terminology: **agreed** identifies a user decision; **assumption** identifies a proposed design parameter; **unverified** requires actual bytes, execution, or external confirmation. The early one-minute/five-minute estimates were withdrawn and are not requirements.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- Підготувати завершений Lab 1 design з перевірюваними джерелами, прозорими припущеннями, контрактами та трьома узгодженими схемами.
-- Залишити в apply конкретні, обмежені задачі з документації та мінімального reproducible tooling.
-- Описати майбутні компоненти так, щоб одна система поступово проходила Labs 2–5.
+- Produce a complete Lab 1 design with verifiable sources, explicit assumptions, contracts, and three consistent diagrams.
+- Keep apply limited to concrete documentation and minimal reproducible tooling tasks.
+- Describe future components so the same system can progress through Labs 2–5.
 
 **Non-Goals:**
 
-- Реалізація ML/runtime/UI/LLM, завантаження датасетів або checkpoints, створення cloud resources, платні API та надсилання email у цьому change.
-- Перевибір погодженої теми, повернення видалених research-чернеток або розширення до building instances, повного 3D, висот, engine integration чи operational miltech-рішень.
-- Видавання catalog metadata, ручної арифметики або плану benchmark за результати виконаного експерименту.
+- Implementing ML/runtime/UI/LLM, downloading datasets/checkpoints, creating cloud resources, paying for APIs, or sending email in this change.
+- Reopening the agreed topic, restoring deleted research drafts, or adding building instances, full 3D, heights, engine integration, or operational military scenarios.
+- Presenting catalog metadata, manual arithmetic, or a benchmark plan as executed experimental results.
 
 ## Decisions
 
-### D1. Межа Lab 1 і формат артефактів
+### D1. Lab 1 boundary and artifact format
 
-Apply створює лише `README.md`, `docs/design.md`, `.python-version`, `Makefile`, `.pre-commit-config.yaml`, `.github/workflows/lint.yml` та змінює `pyproject.toml`/`uv.lock` для dev tooling. Поточний propose пише лише в цей change. Для документації й tooling встановлено `skip_specs: true`: runtime specs вводитимуться у changes реалізації відповідних labs.
+Apply creates only `README.md`, `docs/design.md`, `.python-version`, `Makefile`, `.pre-commit-config.yaml`, `.github/workflows/lint.yml`, and updates `pyproject.toml`/`uv.lock` for development tooling. Propose created planning artifacts only in this change. Documentation/tooling use `skip_specs: true`; runtime specs belong to the implementation changes for their labs.
 
-Зміст розділів 1–7.4 нижче є основою майбутнього `docs/design.md`. Під час apply його слід оформити з точною нумерацією PDF, без OpenSpec-службових розділів Context/Goals/Migration. Наявні припущення та незавершена calculator verification зберігаються видимими.
+Sections 1–7.4 below form the standalone `docs/design.md`, using exact PDF numbering without OpenSpec Context/Goals/Migration sections. Keep assumptions and incomplete calculator verification visible. Repository content is English; discussion with the user remains Ukrainian.
 
-### D2. Мінімальне середовище Lab 1
+### D2. Minimal Lab 1 environment
 
-Запропонований Python для проєкту — 3.12.13 у `.python-version`, узгоджений із задокументованим Colab runtime 2026.07; це вибір майбутнього середовища, не встановлений зараз interpreter. Зберігається погоджена вимога Python >=3.12. Початкові dev pins: Ruff 0.17.2 та pre-commit 4.7.0; релізи перевірені на PyPI, але install/lock compatibility буде перевірено в apply. Джерела: [Colab runtime versions](https://research.google.com/colaboratory/runtime-version-faq.html), [Ruff](https://pypi.org/project/ruff/), [pre-commit](https://pypi.org/project/pre-commit/).
+Project Python is pinned to 3.12.13 in `.python-version`, aligned with the documented Colab 2026.07 runtime; the project constraint remains Python >=3.12. Development pins are Ruff 0.17.2 and pre-commit 4.7.0. During apply, these exact Python/tool versions were installed in the project environment and confirmed with their version commands. Sources: [Colab runtime versions](https://research.google.com/colaboratory/runtime-version-faq.html), [Ruff](https://pypi.org/project/ruff/), [pre-commit](https://pypi.org/project/pre-commit/).
 
-`make setup` виконує `uv sync --locked`; `make lint` — `uv run --locked ruff check .`. Local pre-commit hook викликає ту саму команду Ruff через uv з того самого lock. CI виконує setup/lint на push і pull_request, використовуючи Python pin та явну версію uv. Torch, GDAL, Airflow, MLflow та LLM-пакети на етапі Lab 1 не додаються. Відсутність Python source не є підставою створювати штучний app або тести заради lint.
+`make setup` runs `uv sync --locked`; `make lint` runs `uv run --locked ruff check .`. The local pre-commit hook calls the same Ruff command through uv from the same lockfile. CI runs setup/lint on push and pull_request with the Python pin and explicit uv version. Torch, GDAL, Airflow, MLflow, and LLM packages are not added in Lab 1. No artificial application or tests are created just to provide lint inputs. Environment/CI checks are recorded in README using actual evidence, separately from installed-version confirmation.
 
 ### 1 Overview
 
-GIS-фахівцю потрібна початкова тематична карта покриття території зі знімка зверху. Система приймає RGB-зображення різних розмірів і повертає піксельну маску восьми класів OpenEarthMap, кольорову візуалізацію, overlay та легенду. Для GeoTIFF із придатною геоприв'язкою вона також готує геоприв'язаний raster-шар. Нові визначені партії даних проходять перевірку, автоматичну розмітку, донавчання від чинної моделі та оцінювання з ручним затвердженням активації. Мета курсового проєкту — відтворюваний, інтегрований і спостережуваний процес підготовки GIS-результату та оновлення моделі.
-
-Ці п'ять речень утворюють погоджений зміст anchor overview; після затвердження фінального документа його не переписують під кожну наступну lab.
+A GIS specialist needs an initial thematic land-cover map from an overhead image. The system accepts RGB images of different sizes and returns an eight-class OpenEarthMap pixel mask, a color visualization, an overlay, and a legend. For GeoTIFF input with usable georeferencing, it also produces a georeferenced raster layer. New explicitly defined data batches pass validation, automatic annotation, continual fine-tuning from the current approved model, and evaluation before a person approves activation. The course project aims to make GIS delivery and model updates reproducible, integrated, and observable.
 
 ### 2 Motivation
 
-Основний споживач — GIS-фахівець / картограф, який отримує новий знімок і готує тематичні raster-шари. Використання відбувається за потреби; припущення для першої версії — один користувач та одне активне inference-завдання. Помилки класів можуть спричинити ручну корекцію або непридатність карти для конкретної роботи, тому результат має показувати taxonomy, версію моделі й обмеження.
+The primary consumer is a GIS specialist or cartographer who receives a new image and prepares thematic raster layers. Use is on demand; the initial assumption is one user and one active inference job. Incorrect classes may require manual correction or make the map unsuitable for a particular task, so outputs must identify the taxonomy, model version, and limitations.
 
-Другорядне потенційне застосування — маски як вхід до підготовки території для симулятора. Висоти, матеріали, прохідність, 3D та інтеграція з рушієм не випливають із семантичного класу й не включені до першого результату.
+A possible secondary application is using masks to prepare simulator terrain. Heights, materials, traversability, 3D, and engine integration cannot be inferred from a semantic class alone and are outside the initial deliverable.
 
 ### 3 Success metrics
 
-| Рівень | Метрика / правило | Статус і перевірка |
+| Level | Metric / rule | Status and verification |
 |---|---|---|
-| Decision/workflow | Не менше 9 із 10 заздалегідь визначених коректних входів дають повний пакет, який можна відкрити в GIS без виправлення формату, grid або геоприв'язки | Погоджена попередня ціль, не виміряна. Набір охоплює PNG/JPEG, affine GeoTIFF та різні dimensions; pixel-only входи не зобов'язані мати CRS |
-| Model | Initial candidate mIoU вище trivial baseline; після донавчання mIoU на фіксованій незалежній OEM validation не нижчий за чинну версію | Погоджена відносна ціль; тільки після provenance gate. Показувати IoU/support кожного з 8 класів |
-| System | Completion/failure rate, end-to-end p50/p95, queue wait, peak RAM і throughput за 1 active job | Числові latency/RAM targets невідомі до benchmark; припущення — асинхронна робота на зафіксованій локальній конфігурації |
-| New-domain diagnostic | Згода з псевдомасками NAIP + до 5 прев'ю на кандидата | Діагностика teacher agreement і очевидних помилок; не незалежна temporal accuracy |
+| Decision/workflow | At least 9 of 10 predefined valid inputs produce a complete package that opens in GIS without correcting format, grid, or georeferencing | Agreed preliminary target; not measured. Cases cover PNG/JPEG, affine GeoTIFF, and different dimensions; pixel-only inputs do not require a CRS |
+| Model | Initial candidate mIoU exceeds the trivial baseline; after fine-tuning, mIoU on fixed independent OEM validation is no lower than the current version | Agreed relative target, conditional on the provenance gate. Report IoU and support for each of the 8 classes |
+| System | Completion/failure rate, end-to-end p50/p95, queue wait, peak RAM, and throughput with 1 active job | Numerical latency/RAM targets are unknown until benchmarking; assumption: asynchronous operation on a recorded local configuration |
+| New-domain diagnostic | Agreement with NAIP pseudo-masks and up to 5 previews per candidate | Diagnoses teacher agreement and obvious errors; not independent temporal accuracy |
 
-Для захисту: mIoU є optimization metric; format validity, ресурсні межі й completion є satisficing checks. 9/10 не означає достатню картографічну точність чи підтверджене заощадження робочого часу.
+For the defense, mIoU is the optimization metric; format validity, resource limits, and completion are satisficing checks. The 9/10 target does not establish sufficient cartographic accuracy or measured working-time savings.
 
 ### 4 Requirements and constraints
 
-Функціонально: один файл → persisted job → original/class-ID mask/color mask/overlay/legend/metadata; adaptive whole-image або overlapping tile inference; результат у початковій pixel grid; georeferenced export за наявності коректних CRS/affine; окремий batch lifecycle для навчання; ручний promotion і rollback; GIS-помічник для запиту, перевірок та експорту.
+**Functional requirements:**
 
-| Категорія NFR | Рішення, число або явне припущення |
+- A GIS user uploads one file and receives a persisted job with status.
+- Return the original image, class-ID mask, color mask, overlay, legend, and metadata.
+- Use whole-image inference or overlapping tiles according to the image size and memory budget, and reconstruct the original pixel grid.
+- Produce a georeferenced raster export when valid CRS and affine metadata are available.
+- Maintain a separate batch lifecycle for training data and continual fine-tuning.
+- Require human model promotion and support rollback to a previous approved version.
+- Provide a GIS assistant for requests, validation explanations, and export preparation.
+
+| NFR category | Decision, number, or explicit assumption |
 |---|---|
-| Freshness | Для кожної явно доданої партії перевіряється очікуваний raw manifest/version. 0 нових source scenes у режимі expected-new при отриманні старої версії означає stale-input failure. Добова «свіжість знімання» для NAIP не вимагається |
-| Latency / throughput | 1 користувач, 1 active inference job; решта queued. p95/throughput ще не виміряні; метод benchmark у 6.3. Черга та власне обчислення обліковуються окремо |
-| Availability / fallback | Працює, коли запущене середовище; SLA 24/7 не заявлено. Помилкове завдання має terminal reason і повторний запуск. Недоступна модель дає readiness failure; сервіс не видає фальшиву маску |
-| Reproducibility | Training data version + code commit + config/preprocessing/taxonomy versions + checkpoint digest + seeds фіксуються для run. Повтор тієї самої партії не дублює дані. Після expiry inference input повтор потребує повторного надання того самого файла; metadata не відновлює bytes. Byte-identical GPU weights між різним hardware не обіцяються |
-| Adaptability | Початкова OEM-модель → донавчання з останнього approved checkpoint на новій визначеній партії; частка старих даних у replay ще є параметром експерименту. Promotion тільки людиною |
-| Observability без GT | Errors, durations, watermark, channel/GSD metadata, image statistics та predicted class fractions. Drift не є доказом зміни IoU. Reference/version і threshold policy входять до report |
-| Cost / resource ceilings | Фактичні платні витрати $0. Host 24 GiB RAM не дорівнює quota сервісу. Upload bytes, decoded pixels, tile/batch size, timeout і Docker/Minikube RAM мають бути bounded config; значення встановлюються за resource probe до запуску runtime |
+| Freshness | Each explicitly added batch is checked against the expected raw manifest/version. Receiving an old version with 0 new source scenes in expected-new mode causes a stale-input failure. NAIP does not require daily acquisition freshness |
+| Latency / throughput | 1 user, 1 active inference job; other jobs queue. p95 and throughput are not measured; the benchmark method is in 6.3. Queue wait and computation time are recorded separately |
+| Availability / fallback | Available when the environment is running; no 24/7 SLA. A failed job has a terminal reason and can be retried. An unavailable model causes readiness failure rather than a fabricated mask |
+| Reproducibility | Record training data version, code commit, config/preprocessing/taxonomy versions, checkpoint digest, and seeds per run. Replaying a batch does not duplicate data. Replaying an expired inference input requires uploading the same file again; metadata cannot restore bytes. Byte-identical GPU weights across different hardware are not promised |
+| Adaptability | Initial OEM model followed by fine-tuning from the latest approved checkpoint on each new defined batch; the old-data replay proportion remains an experimental parameter. Human promotion only |
+| Observability without GT | Errors, durations, watermark, channel/GSD metadata, image statistics, and predicted class fractions. Drift is not evidence of an IoU change. Reports identify the reference/version and threshold policy |
+| Cost / resource ceilings | Actual paid-service budget: $0. Host RAM of 24 GiB is not a service quota. Upload bytes, decoded pixels, tile/batch size, timeout, and Docker/Minikube RAM must be bounded configuration; values follow a resource probe before runtime launch |
 
-**Припущення щодо входів:** перший adapter підтримує 8-bit RGB PNG/JPEG і GeoTIFF із визначеним RGB band mapping. Інші bit depths або невідомі bands повертають пояснену відмову до додавання явного adapter. Це початковий compatibility contract, а не перевірена властивість усіх зовнішніх зображень. Dimensions довільних пропорцій; тестові 1024/4096 та внутрішні tile sizes не є користувацькими межами.
+**Input assumption:** the initial adapter supports 8-bit RGB PNG/JPEG and GeoTIFF with an explicit RGB band mapping. Other bit depths or unidentified bands receive an explained rejection until an explicit adapter is added. This is an initial compatibility contract, not a verified property of all external images. Arbitrary aspect ratios are supported; benchmark dimensions of 1024/4096 and internal tile sizes are not user-facing limits.
 
-In scope: semantic land-cover raster, початковий GIS-пакет, відтворюване оновлення та описаний roadmap. Out of scope: detection/instances, підрахунок споруд, автоматичне розділення суміжних будівель, гарантована якість іншої географії, геоприв'язка з нічого, м² без придатного масштабу/методу, 3D, постійний production cloud.
+In scope: semantic land-cover rasters, the initial GIS package, reproducible model updates, and the stated roadmap. Out of scope: detection/instances, building counting, automatic separation of adjacent buildings, guaranteed quality in another geography, inventing georeferencing, areas in square meters without a valid scale/method, 3D, and permanent production cloud operation.
 
-Пріоритети конфліктних вимог: правильна source grid і валідний результат важливіші за швидкий, але некоректний export; бюджет $0 і запуск за потреби мають пріоритет над 24/7 availability. Retention training artifacts забезпечує відтворюваність навчання, тоді як одноденне зберігання приватних inference inputs свідомо обмежує їхній пізніший replay.
+Conflict priorities: the correct source grid and a valid result take priority over a fast but incorrect export; the $0 budget and on-demand operation take priority over 24/7 availability. Retaining training artifacts supports training reproducibility, while one-day retention of private inference inputs deliberately limits their later replay.
 
 ### 5.1 Problem statement
 
-Багатокласова semantic segmentation: кожен валідний RGB-піксель отримує один із восьми взаємовиключних OEM-класів. Відхилений framing — building-only segmentation: він дає менше змістовних типів покриття, ніж бажана GIS-карта.
+Multiclass semantic segmentation assigns each valid RGB pixel one of eight mutually exclusive OEM classes. Building-only segmentation was rejected because it provides fewer meaningful land-cover types than the desired GIS map.
 
 ### 5.2 Data
 
-**Погоджений часовий план:**
+**Agreed timeline:**
 
-| Дані | Роль |
+| Data | Role |
 |---|---|
-| OEM | Початкове supervised навчання та human-labeled development control за умови незалежності weights |
-| Utah NAIP 2018 | Перша зовнішня партія псевдорозмітки та донавчання |
-| Utah NAIP 2021 | Наступне оновлення від останньої затвердженої моделі |
-| Utah NAIP 2024 | Фінальне порівняння; не для train, threshold tuning або регулярного promotion |
+| OEM | Initial supervised training and human-labeled development control, conditional on weight independence |
+| Utah NAIP 2018 | First external batch for pseudo-labeling and fine-tuning |
+| Utah NAIP 2021 | Next update from the latest approved model |
+| Utah NAIP 2024 | Final comparison; excluded from training, threshold tuning, and regular promotion |
 
-OEM має 8 класів, RGB та GSD приблизно 0.25–0.5 m; стандартний split виконується всередині регіонів. Utah NAIP 2018+ заявлено 0.6 m, тому це також зміна масштабу. Першоджерела: [OEM paper, 2.2/S1](https://arxiv.org/html/2210.10732), [Utah NAIP](https://gis.utah.gov/products/sgid/aerial-photography/naip/). Конкретні AOI, bytes tiles, наявність усіх класів і scene overlap ще не перевірено; спочатку потрібен малий міський/сільський піднабір. OEM ZIP не є гарантовано повним комплектом RGB: xBD imagery може потребувати окремого отримання.
+OEM provides 8 classes, RGB, and approximately 0.25–0.5 m GSD; the standard split is within regions. Utah NAIP from 2018 onward is documented at 0.6 m, introducing a scale shift as well. Primary sources: [OEM paper, 2.2/S1](https://arxiv.org/html/2210.10732), [Utah NAIP](https://gis.utah.gov/products/sgid/aerial-photography/naip/). Specific AOIs, tile bytes, class coverage, and scene overlap have not been verified; start with a small urban/rural subset. The OEM ZIP is not guaranteed to contain all RGB imagery: xBD imagery may require separate retrieval.
 
-**Чотири пункти checklist Lab 1:**
+**Four Lab 1 checklist items:**
 
-1. **Time axis:** використовуємо справжній acquisition year/date/interval NAIP і окремий ingestion replay архівних партій; OEM-2022+ з NAIP-2018 є ретроспективним відтворенням надходження, а не історичним backtest доступної у 2018 моделі.
-2. **History/holdout:** 2018/2021 для оновлень та development; 2024 тримаємо закритим до фінального порівняння. Scene/AOI groups і просторове перекриття перевіряємо до crops; temporal і geographical transfer розрізняємо.
-3. **Labels/delay:** OEM labels надходять із dataset release; NAIP pseudo labels доступні після завершення annotation job, без вигаданого фіксованого delay. Регулярне незалежне human ground truth для нових NAIP не планується; operational delay для нього — «не надходить».
-4. **Text corpus:** конкретний corpus у 6.8: OEM paper/code mapping, USGS NAIP dictionary, Utah flight-date documentation, QGIS 3.44 raster documentation і власний export contract. Snapshot/versioning — наступний етап, corpus ще не індексовано.
+1. **Time axis:** use real NAIP acquisition years/dates/intervals and separately replay archived batch ingestion; OEM-2022+ with NAIP-2018 is retrospective arrival replay, not a historical backtest of a model available in 2018.
+2. **History/holdout:** use 2018/2021 for updates and development, keeping 2024 closed until final comparison. Check scene/AOI groups and spatial overlap before cropping; distinguish temporal from geographical transfer.
+3. **Labels/delay:** OEM labels arrive with the dataset release; NAIP pseudo-labels become available after the annotation job, without an invented fixed delay. Routine independent human ground truth for new NAIP imagery is not planned; its operational arrival delay is “never.”
+4. **Text corpus:** section 6.8 identifies the OEM paper/code mapping, USGS NAIP dictionary, Utah flight-date documentation, QGIS 3.44 raster documentation, and the project export contract. Snapshotting/versioning is a later step; the corpus is not yet indexed.
 
-Компенсація для Lab 1: явно описати відсутність незалежних temporal masks і оцінювати teacher agreement разом із незалежним OEM-контролем, якщо його незалежність підтверджена. Це не доводить temporal generalization і не гарантує виконання ще невідомих повних вимог Lab 2.
+Lab 1 compensation: explicitly document the lack of independent temporal masks and evaluate teacher agreement together with independent OEM control if its independence is established. This does not establish temporal generalization or guarantee compliance with the unavailable full Lab 2 requirements.
 
-**Часові поля:** `acquisition_start/end`, `date_precision`, `source_published_at` nullable, `ingested_at`, `processed_at`, `pseudo_labeled_at`. Невідома дата залишається unknown; рік не стає вигаданим 1 січня. USGS розрізняє Acquisition Date і Date Entered; Utah індекси використовують SrcImgDate для 2018/2021 і DATE для 2024. [USGS dictionary](https://www.usgs.gov/centers/eros/science/national-agriculture-imagery-program-naip-data-dictionary).
+**Time fields:** `acquisition_start/end`, `date_precision`, nullable `source_published_at`, `ingested_at`, `processed_at`, and `pseudo_labeled_at`. An unknown date stays unknown; a year does not become an invented January 1 date. USGS distinguishes Acquisition Date from Date Entered; Utah indices use SrcImgDate for 2018/2021 and DATE for 2024. [USGS dictionary](https://www.usgs.gov/centers/eros/science/national-agriculture-imagery-program-naip-data-dictionary).
 
-**Version/freshness:** стабільний raw manifest включає source IDs, checksums, acquisition metadata та adapter version, але виключає змінні ingestion/run timestamps із content digest. Похідні annotation/training manifests додатково посилаються на teacher/checkpoint/config/split versions. Режим expected-new звіряє очікуваний source period/scene set і raw content; повтор старої партії дає freshness failure. Навмисний replay тієї самої версії дає no-op/відтворюваний результат без дублювання. Watermark оновлюється після commit валідного набору, а не після будь-якого успішного DAG.
+**Version/freshness:** a stable raw manifest includes source IDs, checksums, acquisition metadata, and adapter version, excluding variable ingestion/run timestamps from its content digest. Derived annotation/training manifests also reference teacher/checkpoint/config/split versions. Expected-new mode checks the expected source period/scene set and raw content; an old batch causes freshness failure. Intentional replay of the same version produces a no-op or reproducible result without duplication. The watermark advances after committing a valid dataset, not after any successful DAG execution.
 
-**Формати й розміщення:**
+**Formats and storage:**
 
-| Шар | Формат / зберігання |
+| Layer | Format / storage |
 |---|---|
-| Raw | Незмінні source PNG/JPEG/GeoTIFF у object storage, versioned через DVC |
-| Clean / labels | Канонічний RGB і integer masks PNG/GeoTIFF з manifest; crop/tile artifacts відтворюються після split із config |
-| Features | Тензори RGB/normalization під час run; окремої persisted feature table немає |
-| Manifests / metadata | Versioned JSON/JSONL зі стабільним порядком; PostgreSQL для operational job/run state |
-| Models / reports | Checkpoint + manifest + JSON metrics/previews у artifact storage, посилання в MLflow |
-| Corpus у Lab 3 | Source snapshots + extraction config/digests; index посилається на точну doc_version |
+| Raw | Immutable source PNG/JPEG/GeoTIFF in object storage, versioned through DVC |
+| Clean / labels | Canonical RGB and integer-mask PNG/GeoTIFF with a manifest; crop/tile artifacts are reproducible from config after splitting |
+| Features | RGB/normalization tensors during the run; no separate persisted feature table |
+| Manifests / metadata | Versioned JSON/JSONL in stable order; PostgreSQL holds operational job/run state |
+| Models / reports | Checkpoint, manifest, and JSON metrics/previews in artifact storage, referenced by MLflow |
+| Corpus in Lab 3 | Source snapshots and extraction config/digests; the index refers to the exact doc_version |
 
-Git зберігає код, конфігурацію, документацію, lock і DVC pointers/manifests; великі raster/checkpoint bytes залишаються у DVC/object storage. Git LFS не вводиться, бо цю роль вже виконує обраний DVC remote; CSV/Parquet не замінюють raster images, а для малого manifest достатньо JSON.
+Git stores code, configuration, documentation, the lockfile, and DVC pointers/manifests; large raster/checkpoint bytes stay in DVC/object storage. Git LFS is not introduced because the selected DVC remote already fills this role. CSV/Parquet do not replace raster images; JSON is sufficient for the small manifest.
 
 ### 5.3 Techniques
 
-**Baseline:** кожен піксель прогнозується як найчастіший клас, визначений лише за train labels після ignore filtering. Це контрольна точка, не робоча карта.
+**Baseline:** predict the most frequent class at every pixel, determining that class exclusively from training labels after filtering ignored pixels. This is a comparison point, not a usable map.
 
-**Candidate:** U-Net / ResNet18 із ImageNet encoder та 8 вихідними класами через segmentation_models_pytorch; це початковий кандидат, не твердження про найкращу модель. Перше OEM навчання створює робочу версію, подальші NAIP runs ініціалізуються останнім approved checkpoint. [SMP Unet](https://smp.readthedocs.io/en/latest/models.html), [encoder weights](https://smp.readthedocs.io/en/latest/encoders.html).
+**Candidate:** U-Net / ResNet18 with an ImageNet-pretrained encoder and 8 output classes through segmentation_models_pytorch. This is an initial candidate, not a claim of the best model. Initial OEM training creates the working version; later NAIP runs start from the latest approved checkpoint. [SMP Unet](https://smp.readthedocs.io/en/latest/models.html), [encoder weights](https://smp.readthedocs.io/en/latest/encoders.html).
 
-**Annotator:** окреме готове рішення з сумісною taxonomy; checkpoint ще не затверджений. Для кожного pseudo dataset потрібні teacher source, digest, training splits, mapping та annotation config. Офіційні lightweight OEM weights бачили train і validation; новий власний split із тих самих знімків не виправляє залежність. [OEM code](https://open-earth-map.org/code.html). GeoSeg-OV публікує інший готовий варіант, але його repacked split IDs та сумісність ще треба звірити; це кандидат дослідження, не підтверджений teacher. [GeoSeg-OV](https://github.com/zzaiyan/GeoSeg-OV).
+**Annotator:** a separate ready-made model with a compatible taxonomy; its checkpoint is not yet approved. Every pseudo-dataset requires a teacher source, digest, training splits, mapping, and annotation config. Official lightweight OEM weights saw train and validation; creating a new split from those same images does not restore independence. [OEM code](https://open-earth-map.org/code.html). GeoSeg-OV publishes another ready-made option, but its repacked split IDs and compatibility still need checking; it is a research candidate, not a verified teacher. [GeoSeg-OV](https://github.com/zzaiyan/GeoSeg-OV).
 
-| Вхід / властивість | Train-time source | Serving-time source / правило |
+| Input / property | Train-time source | Serving-time source / rule |
 |---|---|---|
-| RGB pixels | OEM / NAIP adapter | Завантажений файл; той самий channel order і versioned normalization |
-| Masks | OEM human labels / versioned teacher output | Відсутні й не потрібні для inference |
-| GSD | Source metadata, якщо є | Metadata файла або явно наданий параметр; unknown не вгадується |
-| CRS / affine / validity | Source raster metadata | Metadata вхідного raster; не є прихованою ознакою з labels |
-| Preprocessing | Config разом із checkpoint | Точна відповідна версія з model manifest |
-| Augmentation | Лише train, синхронно для image/mask | Не застосовується як випадкове train augmentation |
+| RGB pixels | OEM / NAIP adapter | Uploaded file; the same channel order and versioned normalization |
+| Masks | OEM human labels / versioned teacher output | Absent and not required for inference |
+| GSD | Source metadata, if available | File metadata or an explicitly supplied parameter; do not guess unknown values |
+| CRS / affine / validity | Source raster metadata | Input raster metadata; not a hidden label-derived feature |
+| Preprocessing | Config accompanying the checkpoint | Exact corresponding version from the model manifest |
+| Augmentation | Training only, synchronized for image/mask | Random training augmentation is not applied |
 
-Для NAIP RGBNIR вибираємо відомі RGB bands через adapter; модель не починає використовувати NIR неявно. Resize class masks — nearest-neighbor. Whole/tiled inference і stitching мають використовувати однакові model/preprocessing versions.
+For NAIP RGBNIR, an adapter selects known RGB bands; the model must not start using NIR implicitly. Resize class masks with nearest-neighbor interpolation. Whole/tiled inference and stitching use the same model/preprocessing versions.
 
 ### 5.4 Experimentation and validation
 
-- Резервуємо OEM train/validation groups до crops/augmentation; перевіряємо source-scene overlap, суміжні tiles і повторне використання benchmark imagery.
-- До включення готових weights перевіряємо, що модель/teacher не навчалися на зарезервованому контролі. Невідоме provenance блокує заяву про незалежність; teacher train+val не проходить цей gate.
-- Якщо незалежність не підтверджується, відповідний teacher не використовується для такого promotion protocol; пошук сумісного checkpoint продовжується. Lab 1 фіксує цю залежність відкрито, а не позначає її виконаною.
-- Development scene groups 2018/2021 відокремлюємо від update groups наперед; 2024 відкриваємо для фінального порівняння після фіксації конфігурації.
-- IoU для класу = TP/(TP+FP+FN). Рахуємо aggregate confusion matrix на valid GT pixels, а не середнє patch IoU; показуємо support. Клас із нульовим denominator позначаємо undefined із явною averaging policy, не підміняємо IoU=1.
-- Порівнюємо candidate/current на тому самому незалежному control та config. Gate mIoU ≥ current не замінює перегляд per-class IoU; помітна class regression пояснюється перед ручним рішенням.
-- NAIP-2024 оцінює agreement, якщо еталоном є pseudo labels; до 5 preview — sanity check, не доказ справжнього IoU.
-- Готові official OEM test labels або працездатний evaluation server не припускаються без фактичної перевірки.
+- Reserve OEM train/validation groups before crops/augmentation; check source-scene overlap, neighboring tiles, and reused benchmark imagery.
+- Before incorporating pretrained weights, verify that the model/teacher did not train on the reserved control. Unknown provenance blocks an independence claim; a train+val teacher does not pass this gate.
+- If independence cannot be established, do not use that teacher for this promotion protocol; continue searching for a compatible checkpoint. Lab 1 records this dependency openly rather than claiming completion.
+- Separate development scene groups from update groups in 2018/2021 in advance; open 2024 for final comparison after freezing configuration.
+- Class IoU = TP/(TP+FP+FN). Compute an aggregate confusion matrix over valid GT pixels rather than averaging patch IoU, and report support. Mark a zero-denominator class undefined with an explicit averaging policy rather than substituting IoU=1.
+- Compare candidate/current on the same independent control and configuration. The mIoU ≥ current gate does not replace per-class review; explain meaningful class regression before a human decision.
+- NAIP-2024 measures agreement when pseudo-labels are the reference; up to 5 previews are a sanity check, not proof of true IoU.
+- Do not assume official OEM test labels or a functioning evaluation server are available without checking.
 
 ### 5.5 Human in the loop
 
-Користувач отримує email про pipeline failure/drift та готового кандидата, переглядає метрики, lineage і до 5 preview та явно затверджує activation. Автоматичного promotion немає. Відхилений кандидат залишається run artifact, чинний alias не змінюється. Override/rollback повертає alias до конкретної попередньої approved version; той самий job завжди фіксує фактично завантажений checkpoint digest.
+The user receives email about pipeline failure/drift and a ready candidate, reviews metrics, lineage, and up to 5 previews, and explicitly approves activation. Promotion is not automatic. A rejected candidate remains a run artifact; the current alias is unchanged. Override/rollback returns the alias to a specific previously approved version; every job records the actual loaded checkpoint digest.
 
-Lifecycle artifacts: experiment config/run → candidate checkpoint + data/code lineage → registered model version → approved serving alias → monitoring report → next update candidate; попередня retired version зберігається для audit/rollback протягом проєкту.
+Lifecycle artifacts: experiment config/run → candidate checkpoint and data/code lineage → registered model version → approved serving alias → monitoring report → next update candidate. Retired versions remain available for audit/rollback throughout the project.
 
-Colab запускається людиною; усі кроки всередині виконуються командами/конфігурацією репозиторію. Обмін із локальним стеком — перевірюваний artifact bundle: model, metrics, config, source/data versions, commit і checksums; імпорт реєструє run/model у локальному MLflow. Відкривати PostgreSQL або MLflow в інтернет для Colab не потрібно. Доступність ресурсів Colab не гарантується. [Colab FAQ](https://research.google.com/colaboratory/faq.html).
+A person starts Colab; repository commands/configuration perform all steps inside the session. Exchange with the local stack uses a verifiable artifact bundle: model, metrics, config, source/data versions, commit, and checksums; import registers the run/model in local MLflow. Colab does not require exposing PostgreSQL or MLflow to the internet. Colab resource availability is not guaranteed. [Colab FAQ](https://research.google.com/colaboratory/faq.html).
 
 ### 6.1 High-level design
 
-Схеми описують цільовий розвиток системи; запуск цих компонентів не входить до apply Lab 1.
+The diagrams describe the target evolution of the system; launching these components is outside Lab 1 scope.
 
 **Context:**
 
@@ -217,7 +223,7 @@ flowchart TD
     M -->|"email + reviewed next-batch trigger"| T0
 ```
 
-Versioned files виконують offline artifact роль без окремого feature store. Raw gate не вимагає masks для inference або нових NAIP: mask checks застосовуються лише за наявності labels, а донавчання потребує окремого mask gate після annotation. Teacher provenance перевіряється до запуску annotator; похідні маски мають власний version point. На serving-гілку не переходять GT masks. Завантаження теж має input digest/job metadata; це не автоматичне додавання до training dataset.
+Versioned files provide offline artifacts without a separate feature store. The raw gate does not require masks for inference or new NAIP data: mask checks are conditional on available labels, and fine-tuning requires a separate mask gate after annotation. Teacher provenance is checked before annotation; derived masks have their own version point. GT masks do not enter the serving branch. Uploads also have an input digest and job metadata; they are not automatically added to training data.
 
 **Deployment draft:**
 
@@ -262,71 +268,88 @@ flowchart LR
 
 ### 6.2 Infra
 
-Погоджений local stack: DVC, S3-compatible storage, Airflow, MLflow, PostgreSQL. Нижче уточнено design-level topology; додані framework/monitoring варіанти є припущеннями для наступних labs.
+Agreed local stack: DVC, S3-compatible storage, Airflow, MLflow, and PostgreSQL. The table specifies design-level topology; additional framework/monitoring choices are assumptions for later labs.
 
-| Функція | Local / external | Умовний cloud equivalent | Етап |
+| Function | Local / external | Hypothetical cloud equivalent | Stage |
 |---|---|---|---|
-| Raw data, masks, models, reports | MinIO-compatible pgsty/silo з reference PDF; ARM image compatibility ще pending | [Amazon S3](https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html) | Lab 2 |
-| Версії raster artifacts | DVC + S3 remote | Той самий DVC, remote у S3 | Lab 2 |
+| Raw data, masks, models, reports | MinIO-compatible pgsty/silo from the reference PDF; ARM image compatibility is pending | [Amazon S3](https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html) | Lab 2 |
+| Raster artifact versions | DVC + S3 remote | The same DVC, with an S3 remote | Lab 2 |
 | Batch orchestration | Airflow | [Amazon MWAA](https://docs.aws.amazon.com/mwaa/latest/userguide/what-is-mwaa.html) | Lab 2 |
 | Jobs / metadata | PostgreSQL | [RDS PostgreSQL](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_PostgreSQL.html) | Labs 2/4 |
-| Tracking / registry | MLflow + PostgreSQL backend + S3 artifacts | [SageMaker managed MLflow](https://docs.aws.amazon.com/sagemaker/latest/dg/mlflow.html); artifact bucket у S3 | Lab 2 |
-| Training / annotation | Людиною запущений Colab | GPU compute рахується окремо; у цьому hybrid scenario залишається Colab | Lab 2 |
-| Segmentation/job API + UI | Попередньо FastAPI + проста HTML-сторінка, model worker | EKS containers | Lab 4 |
-| GIS assistant API | Окремий сервіс, попередньо FastAPI | EKS containers; LLM backend ще не обраний | Labs 3/4 |
+| Tracking / registry | MLflow + PostgreSQL backend + S3 artifacts | [SageMaker managed MLflow](https://docs.aws.amazon.com/sagemaker/latest/dg/mlflow.html); S3 artifact bucket | Lab 2 |
+| Training / annotation | User-started Colab | GPU compute is costed separately; this hybrid scenario retains Colab | Lab 2 |
+| Segmentation/job API + UI | Proposed FastAPI, a small HTML page, and model worker | EKS containers | Lab 4 |
+| GIS assistant API | Separate service, provisionally FastAPI | EKS containers; LLM backend not selected | Labs 3/4 |
 | Runtime deployment | Docker / Minikube | [Amazon EKS](https://docs.aws.amazon.com/eks/latest/userguide/what-is-eks.html) | Lab 4 |
 | Container registry | Minikube registry | ECR | Lab 4 |
-| Drift reports | Попередньо Evidently job | У кошторисі job на EKS; managed alternative — SageMaker Model Monitor, не включений як окрема послуга | Lab 4 |
-| Metrics / dashboard | Попередньо Prometheus/Grafana | CloudWatch | Lab 4 |
-| Retrieval index | Попередньо pgvector у тій самій PostgreSQL | Обраний сценарій: RDS з pgvector; managed alternative з таблиці курсу: OpenSearch Serverless vector search, не включений у кошторис | Lab 3 |
-| Email adapter | SMTP credentials у local secrets | SES | Lab 4 |
-| Feature store | Not needed: raster artifacts, без online entity features | Окремий managed feature store не замовляється | Усі |
+| Drift reports | Proposed Evidently job | Costed as an EKS job; managed alternative: SageMaker Model Monitor, not a separately included service | Lab 4 |
+| Metrics / dashboard | Proposed Prometheus/Grafana | CloudWatch | Lab 4 |
+| Retrieval index | Proposed pgvector in the same PostgreSQL | Selected scenario: RDS with pgvector; course-table managed alternative: OpenSearch Serverless vector search, excluded from the estimate | Lab 3 |
+| Email adapter | SMTP credentials in local secrets | SES | Lab 4 |
+| Feature store | Not needed: raster artifacts without online entity features | No separate managed feature store | All |
 
-Два containerized application services — segmentation/job API та GIS assistant API. У кожного власний readiness contract: segmentation вимагає валідного checkpoint/preprocessing manifest; assistant — model backend/embedding configuration і доступного corpus index. Відсутній required model artifact має робити probe неуспішним. HTTP liveness саме по собі не підтверджує readiness.
+The two containerized application services are the segmentation/job API and GIS assistant API. Each has its own readiness contract: segmentation requires a valid checkpoint/preprocessing manifest; the assistant requires model-backend/embedding configuration and an available corpus index. Missing required model artifacts must fail probes. HTTP liveness alone does not establish readiness.
 
-[FastAPI](https://fastapi.tiangolo.com/) — запропонований framework, не встановлена залежність. Номери версій reference stack у PDF — вимоги/орієнтири курсу; їхню ARM/Python сумісність ще не перевірено, тому всі runtime dependencies зараз не додаються.
+[FastAPI](https://fastapi.tiangolo.com/) is a proposed framework, not an installed dependency. Reference-stack versions in the PDF are course requirements/guidance; ARM/Python compatibility is unverified, so runtime dependencies are not added in Lab 1.
+
+Lab 1 verification on 2026-10-22: setup, lint, pre-commit configuration/all-file checks, and lock consistency passed in a clean temporary copy with Python 3.12.13, Ruff 0.17.2, and pre-commit 4.7.0. Source files were unchanged. The three Mermaid diagrams rendered and passed visual review. A published clean clone and green default-branch CI remain unverified.
 
 ### 6.3 Performance
 
-Погоджено job-based asynchronous delivery з persisted status. Async не прискорює модель; whole-image і tiling — окреме рішення за розміром та memory budget. Початковий benchmark reference — CPU-serving на зафіксованому Docker/Minikube allocation цього host; наявність прискорення в контейнері не припускається.
+Actual hardware/tooling snapshot, 2026-10-22:
 
-**План вимірювання, не результат:** зафіксувати commit/data/model/preprocessing versions, CPU/RAM limits, dtype і threads; провести окремий cold-start та 5 warm-up запусків, потім по 30 запусків для 1024×1024 і 4096×4096 та одного обраного великого raster case. Виміряти decode/preprocess/inference/stitch/export, peak RSS, p50/p95 завершення від кінця upload при порожній черзі, queue wait і images/hour. Тестові dimensions не є upload limits.
+| Parameter | Value / verification boundary |
+|---|---|
+| Host / CPU | Apple M4 Pro, Mac16,7, arm64, 14 CPU cores |
+| Host RAM | 24 GiB; Docker/Minikube allocation has not been checked |
+| OS | macOS 26.6.2, build 25G83 |
+| Available volume space | Approximately 204.18 GiB at inspection time; not a project quota |
+| Tooling | uv 0.11.21; Docker CLI 29.5.2; daemon not checked |
+| System Python | 3.14.6; .python-version sets a separate project Python pin |
+| Verified project tooling | Python 3.12.13, Ruff 0.17.2, pre-commit 4.7.0 installed in the project environment |
+| Minikube | Command not found in PATH; no cluster launch |
 
-До runtime launch обов'язкові конфігуровані максимуми upload bytes, decoded pixels, in-flight jobs, tile/batch memory, job deadline і temporary disk. У Lab 1 вони явно unknown до resource probe; не можна підміняти їх host RAM чи заявляти необмежений upload. Якщо candidate не проходить бюджет, змінюємо внутрішній tile/batch size або кандидат після вимірювання.
+The snapshot used read-only sysctl, uname, sw_vers, df, and version commands. No checkpoints or raster archives were downloaded; mIoU, inference latency, peak RAM, and GPU time have not been measured.
+
+Agreed execution uses asynchronous jobs with persisted status. Async does not accelerate the model; whole-image versus tiling is a separate choice based on dimensions and memory. The initial benchmark reference is CPU serving within recorded Docker/Minikube allocations on this host; container acceleration is not assumed.
+
+**Measurement plan, not results:** record commit/data/model/preprocessing versions, CPU/RAM limits, dtype, and threads. Measure cold start separately, then run 5 warm-ups and 30 measured runs each for 1024×1024, 4096×4096, and one selected large raster case. Measure decode/preprocess/inference/stitch/export, peak RSS, p50/p95 completion from the end of upload with an empty queue, queue wait, and images/hour. Test dimensions are not upload limits.
+
+Before runtime launch, configure maximum upload bytes, decoded pixels, in-flight jobs, tile/batch memory, job deadline, and temporary disk. These are explicitly unknown in Lab 1 until a resource probe; host RAM cannot substitute for these limits, and unlimited uploads must not be promised. If a candidate misses the budget, adjust internal tile/batch size or the candidate after measurement.
 
 ### 6.4 Security
 
-Local single-user: host ports публікуються на loopback; внутрішній container bind не дорівнює дозволу public ingress. Auth/публічний multi-user service зараз не реалізуються. Secrets передаються environment/local ignored config; чинний .gitignore вже виключає .env/.env.*. Логи й corpus не містять credentials.
+Local single-user access: publish host ports on loopback; an internal container bind does not authorize public ingress. Authentication/public multi-user service is not implemented in this stage. Secrets use environment variables or ignored local configuration; the existing .gitignore excludes .env/.env.*. Logs and corpus content must not contain credentials.
 
-Trust boundaries: перевіряємо фактично декодований формат, channels/dtype, positive dimensions, bounded decoded size, corrupt/TIFF expansion, class domain та grid. Сервер генерує власні object names, забороняє client-controlled paths і не розпаковує довільні архіви через upload API. Downloads/databundles перевіряються checksum. Документи retrieval і тексти запиту є даними: їхні інструкції не можуть змінити дозволи агента чи ініціювати promotion. Tool calls проходять ті самі deterministic validators.
+At trust boundaries, validate decoded format, channels/dtype, positive dimensions, bounded decoded size, corrupt/TIFF expansion, class domain, and grid. The server generates object names, forbids client-controlled paths, and does not unpack arbitrary archives through the upload API. Verify download/data-bundle checksums. Retrieved documents and user requests are data: embedded instructions cannot change agent permissions or initiate promotion. Tool calls use the same deterministic validators.
 
 ### 6.5 Data privacy
 
-Погоджено inference inputs/results зберігати 1 добу. **Припущення точного відліку:** expires_at = accepted_at + 24h; після expiry доступ закритий, queued job не стартує, bytes видаляються cleanup. Deadline running job не пізніше expires_at: прострочене виконання скасовується, пізні outputs не публікуються й також видаляються. Якщо локальне середовище вимкнене, фізичне видалення виконується при наступному старті; ця межа on-demand сервісу описується користувачу.
+Agreed inference input/result retention is 1 day. **Exact-clock assumption:** expires_at = accepted_at + 24h; after expiry, access is denied, queued jobs do not start, and cleanup deletes bytes. Running-job deadlines cannot exceed expires_at: expired execution is canceled, late outputs are not published, and those outputs are deleted too. If the local environment is off, physical deletion occurs at next startup; this on-demand-service limitation is disclosed to the user.
 
-**Нове припущення:** технічні логи й агреговані метрики зберігаються до 30 днів без image bytes, повних назв файлів, точних координат чи secrets; навчальні manifests, дозволені dataset versions, model artifacts і experiment lineage — протягом проєкту. Uploads не стають training data автоматично. Overhead imagery не оголошується гарантовано позбавленою персональних/чутливих даних. Ліцензійні обмеження й атрибуцію джерел фіксуємо стисло; dataset redistribution не є deliverable Lab 1.
+**New assumption:** technical logs and aggregate metrics are retained for up to 30 days without image bytes, full filenames, exact coordinates, or secrets. Training manifests, permitted dataset versions, model artifacts, and experiment lineage remain throughout the project. Uploads do not automatically become training data. Overhead imagery is not assumed to be free of personal or sensitive information. Record explicit license restrictions and source attribution briefly; dataset redistribution is not a Lab 1 deliverable.
 
 ### 6.6 Monitoring and alarms
 
-| Сигнал | Поріг / правило | Реакція |
+| Signal | Threshold / rule | Response |
 |---|---|---|
-| Непридатна training batch | ≥1 blocking format/mask/grid/checksum/class error | Failed gate, report і email; жодного нового training commit |
-| Expected-new freshness | Невідповідний очікуваний raw version/period або 0 new scenes при повторі старого набору | Stale-input failure/email; watermark не просувається |
-| Навмисний replay | Той самий manifest/config/seed, явний replay mode | No-op або відтворюваний output; без помилкового stale alert |
-| Runtime job failure / required model missing | ≥1 terminal failure; model readiness=false | Причина користувачу; email за deduplicated event; чинна версія не змінюється |
-| Input/prediction drift | Нове припущення: alert, коли обрана статистика перевищує 95-й перцентиль reference-vs-reference window comparisons | Щоденний report/email, ручна перевірка; reference/version і достатність samples мають бути зафіксовані |
-| Недостатній monitoring sample | Менше каліброваного мінімального window size; розмір ще unknown | Insufficient-data status; не заявляємо «drift немає» |
-| Performance/resources | Зафіксований configured limit/deadline перевищено; числа після benchmark | Failure/report; p50/p95 і peak RAM видимі |
+| Invalid training batch | ≥1 blocking format/mask/grid/checksum/class error | Failed gate, report, and email; no new training-data commit |
+| Expected-new freshness | Wrong expected raw version/period, or 0 new scenes when an old dataset repeats | Stale-input failure/email; do not advance watermark |
+| Intentional replay | Same manifest/config/seed with explicit replay mode | No-op or reproducible output; no false stale alert |
+| Runtime job failure / required model missing | ≥1 terminal failure; model readiness=false | User-facing reason; deduplicated email event; current version unchanged |
+| Input/prediction drift | New assumption: alert when the selected statistic exceeds the 95th percentile of reference-versus-reference window comparisons | Daily report/email and human review; record reference/version and sample sufficiency |
+| Insufficient monitoring sample | Below a calibrated minimum window size; size still unknown | Insufficient-data status; do not claim “no drift” |
+| Performance/resources | Configured limit/deadline exceeded; numbers follow benchmarking | Failure/report; expose p50/p95 and peak RAM |
 
-95-й перцентиль — нове калібрувальне припущення, не доведена якість drift detector; метод, sample unit та корекцію множинних сигналів уточнюємо за reference windows. Повідомлення не надсилається для кожного пікселя/показника: event key запобігає повторному email про ту саму подію. Моніторинг запускається раз на добу, коли середовище працює; Lab 4 має показати dashboard щонайменше за 2 windows та injected drift, email про який реально отримав користувач.
+The 95th percentile is a new calibration assumption, not proven detector quality. Determine the method, sampling unit, and multiple-signal correction using reference windows. An event key prevents repeated email for the same event; do not email per pixel or metric. Monitoring runs daily when the environment is running. Lab 4 must show a dashboard covering at least 2 windows and injected drift whose email actually reaches the user.
 
-Класові частки inference рахуються лише на observed-valid input domain. Без GT не обчислюємо «поточний IoU» та не використовуємо приховану GT ignore mask.
+Inference class fractions use only the observed-valid input domain. Without GT, do not compute “current IoU” or use a hidden GT ignore mask.
 
 ### 6.7 Cost
 
-Фактичний погоджений бюджет — **$0 платних сервісів**, локальне виконання + доступний Colab. Електрика/власне обладнання не оцінюються як cloud bill.
+The agreed actual budget is **$0 in paid services**, using local execution and available Colab. Electricity and owned hardware are not estimated as a cloud bill.
 
-Параметрична модель:
+Parametric model:
 
 ```text
 C_month = sum(H_service * rate_hour)
@@ -337,39 +360,39 @@ C_month = sum(H_service * rate_hour)
 V_temporary_avg ≈ uploads_per_day * average_input_and_output_GB * retention_days
 ```
 
-Не слід додавати C_LLM_backend вдруге, якщо його CPU/RAM уже оплачено shared worker. Кількість GPU runs і час annotation/fine-tuning невідомі, тому full cloud training не оцінено як нуль: цей доданок винесений за межу наведеного hybrid scenario.
+Do not add C_LLM_backend again when shared-worker CPU/RAM already pays for it. GPU-run count and annotation/fine-tuning time are unknown; full cloud training is excluded from the hybrid scenario below, rather than estimated at zero.
 
-**Попередній числовий scenario:** AWS us-east-1, 730 h/month, 24/7 managed cloud equivalent для serving/operations, без discounts/credits, USD до податків. Це розрахункова альтернатива, не зміна погодженої on-demand доступності та не рекомендація платного deployment. Один CPU worker 4 vCPU/16 GiB є capacity assumption, не benchmark segmentation+LLM.
+**Preliminary numerical scenario:** AWS us-east-1, 730 h/month, a 24/7 managed-cloud equivalent for serving/operations, no discounts/credits, USD before taxes. This is a calculated alternative, not a change to agreed on-demand availability or a recommendation to pay for deployment. One CPU worker with 4 vCPU/16 GiB is a capacity assumption, not a segmentation+LLM benchmark.
 
-| Стаття | Вхід / ставка | USD/month | Доказовість ставки |
+| Item | Input / rate | USD/month | Rate evidence |
 |---|---|---:|---|
 | EKS standard control plane | 730 × 0.10 | 73.00 | [EKS pricing](https://aws.amazon.com/eks/pricing/) |
-| EC2 worker m5.xlarge | 730 × 0.192 | 140.16 | [AWS sample snapshot June 2026](https://aws-samples.github.io/sample-apex-skills/docs/skills/eks/eks-cost-intelligence/references/cost-estimation-fallback/); повторна регіональна перевірка потрібна |
+| EC2 worker m5.xlarge | 730 × 0.192 | 140.16 | [AWS sample snapshot June 2026](https://aws-samples.github.io/sample-apex-skills/docs/skills/eks/eks-cost-intelligence/references/cost-estimation-fallback/); regional recheck required |
 | Worker EBS gp3 | 50 GB × 0.08 | 4.00 | [EBS](https://aws.amazon.com/ebs/volume-types/) |
 | MWAA small | 730 × 0.49 | 357.70 | [MWAA pricing example](https://aws.amazon.com/managed-workflows-for-apache-airflow/pricing/) |
-| MWAA metadata storage | 10 GB × 0.10 | 1.00 | Те саме джерело; не дублює RDS jobs DB |
-| Managed MLflow small + metadata | 730 × 0.60 + 1 GB × 0.10 | 438.10 | [SageMaker pricing, MLflow example](https://aws.amazon.com/sagemaker/ai/pricing/); арифметику перераховано самостійно, регіональну ставку ще підтвердити в calculator |
-| RDS PostgreSQL jobs/index | 730 × 0.016 + 20 GB × 0.115 | 13.98 | **Тарифне припущення**, числа ще не підтверджені calculator; [RDS pricing](https://aws.amazon.com/rds/postgresql/pricing/) |
-| S3 | 100 GB × 0.023 + 10k PUT × 0.005/1k + 100k GET × 0.0004/1k | 2.39 | [S3 pricing](https://aws.amazon.com/s3/pricing/); регіональне підтвердження в calculator |
+| MWAA metadata storage | 10 GB × 0.10 | 1.00 | Same source; does not duplicate the RDS jobs database |
+| Managed MLflow small + metadata | 730 × 0.60 + 1 GB × 0.10 | 438.10 | [SageMaker pricing, MLflow example](https://aws.amazon.com/sagemaker/ai/pricing/); arithmetic recalculated independently, regional rate still requires calculator confirmation |
+| RDS PostgreSQL jobs/index | 730 × 0.016 + 20 GB × 0.115 | 13.98 | **Rate assumption**, not yet calculator-confirmed; [RDS pricing](https://aws.amazon.com/rds/postgresql/pricing/) |
+| S3 | 100 GB × 0.023 + 10k PUT × 0.005/1k + 100k GET × 0.0004/1k | 2.39 | [S3 pricing](https://aws.amazon.com/s3/pricing/); regional calculator confirmation required |
 | ECR | 5 GB × 0.10 | 0.50 | [ECR pricing](https://aws.amazon.com/ecr/pricing/) |
 | CloudWatch | 5 GB ingest × 0.50 + 5 GB stored × 0.03 + 10 metrics × 0.30 | 5.65 | [CloudWatch examples](https://aws.amazon.com/cloudwatch/pricing/) |
-| Network | 2 NAT × 730 × 0.045 + 10 GB × 0.045 + 2 IPv4 × 730 × 0.005 | 73.45 | [VPC pricing](https://aws.amazon.com/vpc/pricing/); NAT regional rate — припущення до calculator |
+| Network | 2 NAT × 730 × 0.045 + 10 GB × 0.045 + 2 IPv4 × 730 × 0.005 | 73.45 | [VPC pricing](https://aws.amazon.com/vpc/pricing/); NAT regional rate is an assumption pending calculator confirmation |
 | SES | 100 email × 0.10/1000 | 0.01 | [SES pricing](https://aws.amazon.com/ses/pricing/) |
-| **Проміжний підсумок scenario** | Ручна арифметика, включаючи непідтверджені тарифи | **1109.94** | **Не calculator-validated quote** |
+| **Preliminary scenario subtotal** | Manual arithmetic, including unconfirmed rates | **1109.94** | **Not a calculator-validated quote** |
 
-Мережеве припущення: 2 AZ для MWAA, 2 NAT, private administrative access без public ALB; S3 того самого регіону, загальний internet egress <100 GB/month у межах доступного account-level allowance. Якщо потрібні interface endpoints, додається їхній ENI-hour/data cost: приклад 4 endpoints × 2 AZ × 730 × $0.01 + 10 GB × $0.01 = $58.50. Кількість endpoints, cross-AZ traffic, backups, публічний ingress і точний routing ще не визначені; не додаємо взаємозамінні мережеві шляхи автоматично. Standard EKS control plane уже врахований; додаткові EKS capabilities та CloudWatch dashboard/alarm charges додаються лише за обраною конфігурацією. [MWAA VPC](https://docs.aws.amazon.com/mwaa/latest/userguide/vpc-create.html), [PrivateLink](https://aws.amazon.com/privatelink/pricing/).
+Network assumption: 2 AZ for MWAA, 2 NAT gateways, private administrative access without a public ALB; same-region S3, total internet egress <100 GB/month within the available account-level allowance. If interface endpoints are needed, add their ENI-hour/data cost: example 4 endpoints × 2 AZ × 730 × $0.01 + 10 GB × $0.01 = $58.50. Endpoint count, cross-AZ traffic, backups, public ingress, and exact routing are undetermined; do not automatically add interchangeable network paths. The standard EKS control plane is already included; additional EKS capabilities and CloudWatch dashboard/alarm charges follow the selected configuration. [MWAA VPC](https://docs.aws.amazon.com/mwaa/latest/userguide/vpc-create.html), [PrivateLink](https://aws.amazon.com/privatelink/pricing/).
 
-Worker оплачує segmentation API, GIS assistant API, CPU model backend та drift-report jobs у межах припущеної capacity. Managed MLflow має власний backend; RDS у кошторисі — jobs/retrieval, а не повторна оплата його metadata. Придатність такого worker і RDS для обраної майбутньої LLM ще не підтверджена. Full cloud GPU training, API LLM, додатковий GPU-serving, support, податки та перевищення allowances не включені.
+The worker pays for the segmentation API, GIS assistant API, CPU model backend, and drift-report jobs within assumed capacity. Managed MLflow has its own backend; the costed RDS is for jobs/retrieval, not a second charge for MLflow metadata. Worker/RDS suitability for the future LLM is unverified. Full cloud GPU training, API LLM usage, additional GPU serving, support, taxes, and allowance overruns are excluded.
 
-**Стан вимоги calculator:** [AWS Pricing Calculator](https://calculator.aws/) у доступному web-reader відкрився як JavaScript app без придатної форми. Збережений estimate/export не створений. До завершення Lab 1 apply потрібно відтворити зазначені inputs у provider calculator, перевірити EC2/RDS/managed MLflow/NAT/network topology, dashboard/alarm selection та зафіксувати дату, посилання/estimate ID і total у 6.7. Поточну таблицю не можна позначати як завершений calculator-backed estimate. Це конкретний delivery gate, а не прихований виконаний пункт.
+**Calculator requirement status:** [AWS Pricing Calculator](https://calculator.aws/) appeared as a JavaScript app without a usable form in the web reader. During apply on 2026-10-22, native Chrome opened the calculator, but interactive access was canceled before an estimate was obtained. No saved estimate/export or estimate ID exists. This records an interrupted verification attempt, not a claim that AWS is permanently unavailable. Before Lab 1 submission, reproduce the stated inputs in the provider calculator, verify EC2/RDS/managed MLflow/NAT/network topology and dashboard/alarm choices, and record the date, estimate URL/ID, and total in 6.7. The current table must not be marked as a completed calculator-backed estimate. This remains an explicit incomplete delivery gate.
 
 ### 6.8 Integration points
 
-**Upstream:** OEM authors/source imagery та Utah UGRC/NAIP; зберігаємо source URL/entity ID, license note, scene/AOI ID, acquisition metadata, checksums і adapter version. Невалідна training batch відхиляється повністю з report; inference upload без labels є нормальним входом.
+**Upstream:** OEM authors/source imagery and Utah UGRC/NAIP. Retain source URL/entity ID, license note, scene/AOI ID, acquisition metadata, checksums, and adapter version. Reject an invalid training batch as a whole with a report; an inference upload without labels is a valid input.
 
-**Власний mask contract — taxonomy v1:**
+**Project mask contract — taxonomy v1:**
 
-| Internal ID | OEM raw ID | Канонічний клас |
+| Internal ID | OEM raw ID | Canonical class |
 |---:|---:|---|
 | 0 | 1 | bareland |
 | 1 | 2 | rangeland |
@@ -379,94 +402,94 @@ Worker оплачує segmentation API, GIS assistant API, CPU model backend т�
 | 5 | 6 | water |
 | 6 | 7 | agriculture land |
 | 7 | 8 | building |
-| 255 | 0 | ignore/unknown у training; observed NoData у export за окремою policy |
+| 255 | 0 | Training ignore/unknown; observed export NoData under a separate policy |
 
-Raw mapping підтверджено [OEM utils.py](https://raw.githubusercontent.com/bao18/open_earth_map/main/open_earth_map/utils.py); кодові aliases Grass/Pavement/Cropland узгоджуємо з назвами paper taxonomy, а не вводимо додаткові класи. Офіційний [dataset loader](https://raw.githubusercontent.com/bao18/open_earth_map/main/open_earth_map/dataset.py) не є готовим нашим remap: перетворення 1–8→0–7 і 0→255 робимо явно; unsigned underflow при mask−1 заборонений.
+The raw mapping was checked in [OEM utils.py](https://raw.githubusercontent.com/bao18/open_earth_map/main/open_earth_map/utils.py). Align the code aliases Grass/Pavement/Cropland with the paper taxonomy rather than adding classes. The official [dataset loader](https://raw.githubusercontent.com/bao18/open_earth_map/main/open_earth_map/dataset.py) does not implement our remap: explicitly convert 1–8→0–7 and 0→255; unsigned underflow from mask−1 is forbidden.
 
-Ignore=255 виключається з loss/confusion matrix. На inference 255 дозволено лише за observed alpha/NoData/validity; padding обрізається, низька confidence сама не стає NoData. На валідному RGB кожен піксель має ID 0–7.
+Exclude ignore=255 from loss/confusion matrices. At inference, 255 is allowed only for observed alpha/NoData/validity; trim padding, and do not turn low confidence alone into NoData. Every valid RGB pixel receives ID 0–7.
 
-**Downstream GIS:** source-grid class-ID mask, palette/legend, colored preview/overlay і JSON metadata. GeoTIFF output — uint8 single band з тими самими width/height, CRS та affine, коли вони придатні. Відсутня affine або RPC/GCP-only input дає pixel mask і діагностику, без вигаданої геоприв'язки. QGIS round-trip перевіряє grid, class domain, NoData та palette. [QGIS 3.44 Raster Properties](https://docs.qgis.org/3.44/en/docs/user_manual/working_with_raster/raster_properties.html). Перший scope не потребує площ у м².
+**Downstream GIS:** source-grid class-ID mask, palette/legend, color preview/overlay, and JSON metadata. GeoTIFF output is uint8, single band, with the original width/height, CRS, and affine when valid. Missing affine or RPC/GCP-only input produces a pixel mask and diagnostics without invented georeferencing. A QGIS round trip checks grid, class domain, NoData, and palette. [QGIS 3.44 Raster Properties](https://docs.qgis.org/3.44/en/docs/user_manual/working_with_raster/raster_properties.html). The initial scope does not require areas in square meters.
 
-**Job/result contract:** server-generated job_id, input digest, accepted_at/expires_at, status `queued/running/succeeded/failed/expired`, versioned model/preprocessing/taxonomy, actual checkpoint digest, pixel dimensions, CRS/affine availability, valid-domain policy, file references і machine-readable validation reasons. Повтор після failure створює пов'язаний новий run; model promotion під час job не змінює його вже обраний checkpoint.
+**Job/result contract:** server-generated job_id, input digest, accepted_at/expires_at, status `queued/running/succeeded/failed/expired`, versioned model/preprocessing/taxonomy, actual checkpoint digest, pixel dimensions, CRS/affine availability, valid-domain policy, file references, and machine-readable validation reasons. Retrying a failure creates a linked new run; promotion during a job does not change its already selected checkpoint.
 
-**Colab bundle:** dataset manifest digest, code commit, config/seed/environment, teacher/current-model IDs, checkpoint digest, metrics, preview references і validation report. Bundle не містить SMTP/cloud secrets; імпорт перевіряє hashes/schema/target dataset version перед logging у локальний MLflow.
+**Colab bundle:** dataset-manifest digest, code commit, config/seed/environment, teacher/current-model IDs, checkpoint digest, metrics, preview references, and validation report. The bundle contains no SMTP/cloud secrets; import checks hashes/schema/target dataset version before logging to local MLflow.
 
-**Конкретний retrieval corpus:**
+**Concrete retrieval corpus:**
 
-| doc_id | Документ / вибрані розділи | Версія / стан |
+| doc_id | Document / selected sections | Version / status |
 |---|---|---|
-| oem-paper | [OpenEarthMap paper](https://arxiv.org/html/2210.10732): 2.2, S1 class definitions, S5 attribution | arXiv 2210.10732v1; metadata перевірено 2026-10-22 |
-| oem-mask-codes | [OEM utils.py](https://raw.githubusercontent.com/bao18/open_earth_map/main/open_earth_map/utils.py): class dictionaries | mutable main; exact commit і bytes hash ще pending |
-| naip-dictionary | [USGS NAIP Data Dictionary](https://www.usgs.gov/centers/eros/science/national-agriculture-imagery-program-naip-data-dictionary): Acquisition Date, Date Entered, bands, resolution, datum/projection | Published 2021-07-19; direct open нестабільний, текст перевірено search |
-| utah-naip | [UGRC NAIP](https://gis.utah.gov/products/sgid/aerial-photography/naip/): RGB/NIR, resolution, Finding flight dates | Last update 2024; metadata перевірено 2026-10-22 |
-| qgis-raster | [QGIS 3.44](https://docs.qgis.org/3.44/en/docs/user_manual/working_with_raster/raster_properties.html): 13.1.1, 13.1.2, 13.1.3.1, 13.1.4 | Документована version 3.44 |
-| project-export-contract | Цей погоджуваний розділ 6.8 майбутнього docs/design.md | planned; digest/commit з'явиться після фактичного запису |
+| oem-paper | [OpenEarthMap paper](https://arxiv.org/html/2210.10732): 2.2, S1 class definitions, S5 attribution | arXiv 2210.10732v1; metadata checked 2026-10-22 |
+| oem-mask-codes | [OEM utils.py](https://raw.githubusercontent.com/bao18/open_earth_map/main/open_earth_map/utils.py): class dictionaries | Mutable main; exact commit and byte hash pending |
+| naip-dictionary | [USGS NAIP Data Dictionary](https://www.usgs.gov/centers/eros/science/national-agriculture-imagery-program-naip-data-dictionary): Acquisition Date, Date Entered, bands, resolution, datum/projection | Published 2021-07-19; direct access unstable, text checked through search |
+| utah-naip | [UGRC NAIP](https://gis.utah.gov/products/sgid/aerial-photography/naip/): RGB/NIR, resolution, Finding flight dates | Last update 2024; metadata checked 2026-10-22 |
+| qgis-raster | [QGIS 3.44](https://docs.qgis.org/3.44/en/docs/user_manual/working_with_raster/raster_properties.html): 13.1.1, 13.1.2, 13.1.3.1, 13.1.4 | Documented version 3.44 |
+| project-export-contract | Section 6.8 of docs/design.md | Working document; capture commit/digest when snapshotting in Lab 3 |
 
-Corpus manifest поля: doc_id/title/publisher/source_url/source_revision/accessed_at/selected_sections/snapshot_path/snapshot_sha256/extraction_version/doc_version/reuse_note. Chunks посилаються на doc_id + doc_version + section/page/line locator; відповіді цитують конкретні джерела. SHA256 обчислюється з фактичних snapshot bytes; зараз null/pending, фальшиві hashes не створюються. Lab 1 називає корпус; ingestion/indexing та versioned prompts належать Lab 3.
+Corpus-manifest fields: doc_id/title/publisher/source_url/source_revision/accessed_at/selected_sections/snapshot_path/snapshot_sha256/extraction_version/doc_version/reuse_note. Chunks reference doc_id, doc_version, and section/page/line locator; answers cite specific sources. Compute SHA256 from actual snapshot bytes; current values remain null/pending rather than fabricated hashes. Lab 1 names the corpus; ingestion/indexing and versioned prompts belong to Lab 3.
 
-LLM сценарій: запит «підготуй GeoTIFF для QGIS» + metadata/validation → grounded план, пояснення відсутніх даних і дозволені кроки експорту. Lab 3 порівнює plain LLM та retrieval. Lab 5 надає inspect/segment/validate/export tools; числові обчислення/CRS-перевірки робить код, activation моделі залишається за користувачем.
+LLM scenario: a request such as “prepare a GeoTIFF for QGIS,” together with metadata/validation, produces a grounded plan, an explanation of missing information, and permitted export steps. Lab 3 compares plain LLM and retrieval. Lab 5 adds inspect/segment/validate/export tools; code handles numerical/CRS checks, and model activation remains a user decision.
 
 ### 6.9 Risks and uncertainties
 
-| Ризик | Mitigation / gate |
+| Risk | Mitigation / gate |
 |---|---|
-| Teacher бачив OEM control | Перевірити training scene IDs/checkpoint provenance до pseudo-label stage; незалежність не заявляти без підтвердження |
-| NAIP pseudo labels відтворюють помилки teacher | Agreement називати agreement; preview ≤5 є sanity check; не заявляти незалежний temporal IoU |
-| Utah 0.6 m / інші регіони змінюють domain | Малий pilot, GSD metadata, per-class diagnostic; перенесення на Україну не гарантувати |
-| Немає перевірених NAIP tiles / класового покриття | До Lab 2 вибрати малий конкретний міський/сільський AOI та перевірити dates, access, overlap і class support |
-| Забування OEM після update | Фіксований незалежний development control, old-data replay як експериментальний параметр, human gate, rollback |
-| Colab reset / нестача GPU | Repro command/config, збереження bundle/checkpoints, повторний запуск; сесія не є production worker |
-| Великий/пошкоджений upload вичерпує RAM/disk | Bounded decoding, limits до runtime, tiling/streaming, failure reason |
-| Train/serve skew | Спільний versioned RGB preprocessing, checkpoint manifest і ті самі channel/grid правила |
-| Помилкові GIS coordinates | Лише перевірені CRS/affine, round-trip; pixel result за відсутності georeferencing |
-| LLM помиляється / виконує інструкції документа | Retrieval citations, deterministic tool validators, обмежені tools, evaluation; promotion не делегується |
-| Email не доходить / помилковий drift | Dedup, явний insufficient-data, Lab 4 injected shift із реально отриманим email |
-| Cloud estimate неповний / capacity недостатня | Calculator gate, окремі unknown costs, benchmark; $0 фактичних витрат зберігається |
-| Source imagery reuse / licensing | Вести provenance/attribution, overlap audit; стисло фіксувати явні обмеження, не поширювати dataset без підстав |
+| Teacher saw OEM control | Check training scene IDs/checkpoint provenance before pseudo-labeling; claim independence only after verification |
+| NAIP pseudo-labels repeat teacher errors | Call agreement agreement; ≤5 previews are a sanity check, not independent temporal IoU |
+| Utah 0.6 m / other regions shift the domain | Small pilot, GSD metadata, per-class diagnostics; no guaranteed transfer to Ukraine |
+| NAIP tiles / class coverage unverified | Before Lab 2, select a small specific urban/rural AOI and check dates, access, overlap, and class support |
+| OEM forgetting after updates | Fixed independent development control, old-data replay as an experimental parameter, human gate, rollback |
+| Colab reset / GPU shortage | Reproducible commands/config, saved bundles/checkpoints, retry; the session is not a production worker |
+| Large/corrupt upload exhausts RAM/disk | Bounded decoding, limits before runtime, tiling/streaming, failure reason |
+| Train/serve skew | Shared versioned RGB preprocessing, checkpoint manifest, and identical channel/grid rules |
+| Incorrect GIS coordinates | Validated CRS/affine only, round trip; pixel result if georeferencing is absent |
+| LLM errors / obeying document instructions | Retrieval citations, deterministic tool validators, restricted tools, evaluation; no delegated promotion |
+| Email delivery failure / false drift | Deduplication, explicit insufficient-data state, Lab 4 injected shift with actual email receipt |
+| Incomplete cloud estimate / insufficient capacity | Calculator gate, separate unknown costs, benchmark; retain $0 actual expenditure |
+| Reused source imagery / licensing | Provenance/attribution and overlap audit; briefly record explicit restrictions and do not redistribute data without permission |
 
 ### 7.1 Alternatives
 
-| Альтернатива | Плюси | Мінуси | Рішення |
+| Alternative | Pros | Cons | Decision |
 |---|---|---|---|
-| Building-only segmentation | Простіша taxonomy, фокус на будівлях | Втрачає дороги, рослинність, воду й інші бажані типи покриття | Відхилено на користь 8 класів OEM |
-| Синхронний HTTP запит до повного завершення | Менше job-state логіки | Довгі jobs, timeout, слабка видимість прогресу | Відхилено; один файл → persisted asynchronous job |
-| Зменшення кожного знімка до одного fixed input | Простий memory profile | Втрата дрібних об'єктів при великому raster | Не обираємо як єдину стратегію; whole/tiled за бюджетом |
-| Full managed cloud 24/7 | Керовані сервіси, cloud topology | Сотні/тисяча USD при малому навчальному workload; суперечить $0 actual budget | Лише розрахунковий equivalent; фактичний запуск локально/Colab |
-| Окремий feature store | Online entity-feature lookups | Для поточних raster inputs потреби не визначено | Not needed із поясненням у layer 3 |
+| Building-only segmentation | Simpler taxonomy; focus on buildings | Loses roads, vegetation, water, and other desired cover types | Rejected in favor of 8 OEM classes |
+| Synchronous HTTP request until completion | Less job-state logic | Long jobs, timeouts, weak progress visibility | Rejected; one file produces a persisted asynchronous job |
+| Resize every image to one fixed input | Simple memory profile | Loses small objects in large rasters | Rejected as the sole strategy; whole/tiled inference follows the budget |
+| Fully managed cloud 24/7 | Managed services and cloud topology | Hundreds/roughly a thousand USD for a small academic workload; conflicts with the $0 actual budget | Calculated equivalent only; actual execution local/Colab |
+| Separate feature store | Online entity-feature lookups | No established need for current raster inputs | Not needed, explained in layer 3 |
 
 ### 7.2 Placeholder
 
-Placeholder відповідно до Lab 1; буде заповнено за повними умовами Lab 2. Офіційну назву розділу не вигадуємо.
+Placeholder required by Lab 1; fill using the full Lab 2 instructions. Do not invent an official section name.
 
 ### 7.3 Placeholder
 
-Placeholder відповідно до Lab 1; буде заповнено за повними умовами Lab 4. Офіційну назву розділу не вигадуємо.
+Placeholder required by Lab 1; fill using the full Lab 4 instructions. Do not invent an official section name.
 
 ### 7.4 Milestones
 
-- **Lab 2:** versioned data pull, idempotent interval replay, deliberately failed bad-batch gate, baseline/candidate і MLflow run/model lineage з data version та commit.
-- **Lab 3:** versioned corpus/prompts і plain-vs-retrieval evaluation з retrieval/answer metrics, tokens/compute/cost та p50/p95.
-- **Lab 4:** два commit-tagged containerized services у Minikube з health contracts, scheduled reports/dashboard за ≥2 windows, injected drift із реально отриманим email та one-command startup/smoke.
-- **Lab 5:** GIS agent з inspect/segment/validate/export tools, persisted traces та десятьма evaluation tasks, виконаними двічі.
+- **Lab 2:** add versioned data pull, idempotent interval replay, a deliberately failing bad-batch gate, baseline/candidate, and MLflow run/model lineage with data version and commit.
+- **Lab 3:** add versioned corpus/prompts and plain-versus-retrieval evaluation with retrieval/answer metrics, tokens/compute/cost, and p50/p95.
+- **Lab 4:** add two commit-tagged containerized services in Minikube with health contracts, scheduled reports/dashboard for ≥2 windows, injected drift with an actually received email, and one-command startup/smoke.
+- **Lab 5:** add a GIS agent with inspect/segment/validate/export tools, persisted traces, and ten evaluation tasks executed twice.
 
-Повні умови Labs 2–5 відсутні; milestones ґрунтуються лише на overview/scorecard Lab 1. Перед реалізацією кожної lab потрібно прочитати її повні умови.
+Full Labs 2–5 instructions are unavailable; milestones rely only on the Lab 1 overview/scorecard. Read the complete instructions before implementing each lab.
 
 ## Risks / Trade-offs
 
-Системні ризики та mitigations визначені в 6.9. Ризик самого change — перетворити Lab 1 на передчасну реалізацію всього курсу; його стримує точний file scope і відсутність runtime implementation tasks. Інша межа — надмірні твердження про вимірювання: hardware snapshot і ручна арифметика є фактами перевірки, а latency, якість, capacity та calculator quote залишаються непідтвердженими.
+System risks and mitigations are in 6.9. The change itself risks expanding Lab 1 into premature implementation of the whole course; the explicit file scope and absence of runtime tasks prevent this. Another risk is overstating evidence: the hardware snapshot and manual arithmetic are inspected facts, while latency, quality, capacity, and a calculator quote remain unverified.
 
 ## Migration Plan
 
-1. Створити docs/design.md зі змісту 1–7.4, звірити всі NFR/checklist та три схеми; зберегти явні assumptions.
-2. Завершити calculator gate для 6.7 без створення cloud resources; exact inputs/estimate link записати в design. Якщо доступ до calculator лишається неможливим, явно повідомити цю конкретну перешкоду й не оголошувати Lab 1 повністю готовою до здачі.
-3. Заповнити README, додати тільки dev pins/Python pin, Makefile, pre-commit і CI; сформувати lock.
-4. Перевірити make setup/lint та pre-commit у чистому тимчасовому clone, без штучних ML tests; lint CI має стати green після окремо виконаного push.
-5. Підготувати submission checklist і перевірити 20 theoretical questions Appendix 2 через власний дизайн. Окремий файл відповідей не потрібен.
-6. Submission commit/push/tag lab-1 не виконуються поточним propose. За наступної явної команди виконати відповідний git workflow; rollback документації/tooling — цільовий revert власного change без втрати інших змін.
+1. Create docs/design.md from sections 1–7.4, checking all NFR/checklist items and diagrams while retaining explicit assumptions.
+2. Complete the calculator gate for 6.7 without creating cloud resources, recording exact inputs and an estimate link. The apply attempt opened native Chrome, but interactive access was canceled before an estimate was produced; retain this specific incomplete gate and do not claim full submission readiness.
+3. Fill README, add only the development/Python pins, Makefile, pre-commit, and CI, and generate the lockfile.
+4. Verify setup/lint and pre-commit in a clean temporary tree without artificial ML tests. A true remote clean-clone check and green default-branch CI follow a separately requested publication.
+5. Prepare the submission checklist and review the 20 Appendix 2 theory questions against this design; a separate answer document is not required.
+6. Submission commit/push/tag `lab-1` are not performed by propose. Execute the corresponding Git workflow only on a separate explicit request; rollback uses a targeted revert of this change without losing unrelated work.
 
 ## Open Questions
 
-- Конкретний teacher checkpoint, його original scene splits та реальні NAIP AOI ще не перевірені; це gates майбутнього data/training change, не підстава для вигаданих metrics у Lab 1.
-- Точні runtime RAM/upload/tile/deadline limits і p95 визначаються benchmark до запуску сервісу; зазначений host snapshot не замінює цього.
-- Конкретні LLM/embedding weights, package compatibility та drift reference sample/window sizes уточнюються у відповідних labs без зміни погоджених ролей.
-- Calculator regional inputs/RDS/network topology ще потребують зовнішньої перевірки; delivery gate у Migration/tasks конкретно охоплює цю роботу.
+- The specific teacher checkpoint, original training scene splits, and real NAIP AOIs remain unverified gates for the later data/training change, not grounds for invented Lab 1 metrics.
+- Runtime RAM/upload/tile/deadline limits and p95 require benchmarking before service launch; host specifications do not replace this.
+- LLM/embedding weights, package compatibility, and drift reference sample/window sizes are decided in the relevant labs without changing agreed roles.
+- Calculator regional inputs, RDS/network topology, and a saved estimate still require completion; the corresponding migration/task gate remains open after the canceled interactive attempt.

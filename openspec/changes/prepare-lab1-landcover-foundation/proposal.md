@@ -2,33 +2,33 @@
 
 ## Why
 
-Погоджений навчальний проєкт має допомагати GIS-фахівцю отримувати багатокласову карту покриття території зі знімка та з часом донавчати модель на нових партіях даних. Репозиторій наразі містить умови Lab 1 і початкове Python-середовище, але не має документа дизайну, README зі scorecard або відтворюваного lint-каркаса, необхідних для здачі.
+The agreed course project should help a GIS specialist obtain a multiclass land-cover map from an overhead image and fine-tune the model on new data batches over time. At the start of this change, the repository contained the Lab 1 assignment and an initial Python environment, but lacked the design document, README with a scorecard, and reproducible lint setup required for submission.
 
 ## What Changes
 
-- Підготувати `docs/design.md` з точною структурою Lab 1, трьома узгодженими схемами, джерелами та явно відокремленими фактами, погодженими рішеннями, новими припущеннями й невиміряними характеристиками.
-- Описати OEM taxonomy, NAIP Utah 2018/2021 та фінальну перевірку 2024, незалежність контролю, походження псевдомасок, freshness/idempotency, train/serve-контракти та відтворюване донавчання з ручним запуском Colab.
-- Зафіксувати локальний inference, мінімальний вебінтерфейс, DVC/S3-сумісне сховище, Airflow, MLflow, PostgreSQL, GIS-помічника, email-моніторинг і roadmap Labs 2–5.
-- Надати конкретний retrieval-корпус, managed cloud equivalents, параметричну модель вартості й попередній числовий сценарій; окремо позначити незавершену перевірку provider calculator.
-- Підготувати README з п'ятьма реченнями про проблему та двома Lab 1 scorecard rows; pinned dev environment, Makefile `setup`/`lint`, pre-commit із тим самим linter та lint CI.
-- Передбачити перевірку clean-clone setup/lint, узгодженості документа й схем, підготовку до захисту та checklist здачі.
+- Prepare `docs/design.md` with the exact Lab 1 structure, three consistent diagrams, sources, and a clear distinction between observed facts, agreed decisions, new assumptions, and unmeasured properties.
+- Describe the OEM taxonomy, Utah NAIP 2018/2021 updates and final 2024 evaluation, control-set independence, pseudo-mask provenance, freshness/idempotency, training/serving contracts, and reproducible fine-tuning with a manually started Colab session.
+- Document local inference, a minimal web interface, DVC/S3-compatible storage, Airflow, MLflow, PostgreSQL, a GIS assistant, email monitoring, and the Labs 2–5 roadmap.
+- Identify a concrete retrieval corpus, managed cloud equivalents, a parametric cost model, and a preliminary numerical scenario; explicitly mark provider-calculator verification as pending.
+- Prepare a README with five sentences about the problem and two Lab 1 scorecard rows; add a pinned development environment, Makefile `setup`/`lint` targets, pre-commit using the same linter, and lint CI.
+- Include clean-clone setup/lint verification, document/diagram consistency checks, defense preparation, and a submission checklist.
 
-Цей change охоплює документацію та tooling Lab 1. Навчання, завантаження великих датасетів, inference/UI, Airflow DAG, corpus ingestion, контейнери, Minikube, email і LLM/agent описуються як наступні етапи та не реалізуються ним. Фактичний бюджет залишається $0; платні ресурси не створюються.
+This change covers Lab 1 documentation and tooling. Training, large dataset downloads, inference/UI, Airflow DAGs, corpus ingestion, containers, Minikube, email delivery, and the LLM/agent are described as later stages and are not implemented by this change. The actual budget remains $0; no paid resources are created.
 
 ## Capabilities
 
 ### New Capabilities
 
-Немає змін runtime-поведінки: це документація та інструменти репозиторію. У `.openspec.yaml` встановлено `skip_specs: true`; поведінкові specs майбутніх сервісів мають з'являтися разом із відповідними changes Labs 2–5.
+There are no runtime behavior changes: this change provides documentation and repository tooling. `.openspec.yaml` sets `skip_specs: true`; behavioral specifications for future services should accompany the corresponding Labs 2–5 changes.
 
 ### Modified Capabilities
 
-Немає. Перевірка `openspec list --specs --json` не виявила наявних capability specs.
+None. The `openspec list --specs --json` check found no existing capability specifications.
 
 ## Impact
 
-- Поточний propose створює лише planning artifacts усередині `openspec/changes/prepare-lab1-landcover-foundation/`.
-- Майбутній apply змінює `README.md`, створює `docs/design.md`, `Makefile`, `.pre-commit-config.yaml`, `.github/workflows/lint.yml`, `.python-version` та оновлює `pyproject.toml`/`uv.lock` лише для мінімального dev tooling. Розрахунок калькулятора фіксується в design як посилання з датою та вхідними параметрами; окремі research-файли не відновлюються.
-- Runtime ML/MLOps-залежності не встановлюються на етапі Lab 1. Системні Python, Docker, Minikube та конфігурація машини цим change не змінюються.
-- Git commit/push, отримання green CI на default branch і submission tag `lab-1` є окремими кроками здачі; поточний propose їх не виконує.
-- Ризики: непідтверджене походження готового annotator, відсутність незалежної temporal NAIP ground truth, неперевірені конкретні tiles, сумісність майбутніх ML-залежностей та незавершений cloud calculator estimate.
+- Planning artifacts reside in `openspec/changes/prepare-lab1-landcover-foundation/`.
+- Implementation updates `README.md`, creates `docs/design.md`, `Makefile`, `.pre-commit-config.yaml`, `.github/workflows/lint.yml`, and `.python-version`, and updates `pyproject.toml`/`uv.lock` only for minimal development tooling. The calculator estimate is recorded in the design as a link with a date and inputs; separate research files are not restored.
+- Runtime ML/MLOps dependencies are not installed during Lab 1. This change does not modify system Python, Docker, Minikube, or machine configuration.
+- Git commit/push, green CI on the default branch, and the submission tag `lab-1` are separate submission steps; creating the proposal does not perform them.
+- Risks include unverified pretrained annotator provenance, the absence of independent temporal NAIP ground truth, unverified individual tiles, compatibility of future ML dependencies, and the pending cloud calculator estimate.
