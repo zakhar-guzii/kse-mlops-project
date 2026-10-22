@@ -180,21 +180,34 @@ Versioned files provide offline artifacts without a separate feature store. The 
 
 ```mermaid
 flowchart LR
-    B["Browser"] --> S
-    subgraph LOCAL["Local machine; Minikube in Lab 4"]
+    B["Browser"] -->|"local"| S
+    subgraph LOCAL["Local / Minikube; cloud: EKS on one m5.xlarge"]
       S["Segmentation/job API + small web UI; AWS EKS"]
       G["GIS assistant API; AWS EKS"]
       O["S3-compatible pgsty/silo; AWS S3"]
       D["DVC client; AWS S3 remote"]
       A["Airflow; AWS MWAA"]
-      P["PostgreSQL; AWS RDS"]
+      P["PostgreSQL; RDS t4g.medium Single-AZ"]
       R["MLflow; SageMaker managed MLflow"]
       E["Drift report job; EKS / managed monitor alternative"]
       M["Prometheus + Grafana; CloudWatch"]
-      VEC["pgvector in PostgreSQL; RDS pgvector"]
+      VEC["pgvector; same RDS instance"]
       IMG["Container registry; ECR"]
       MAIL["Email adapter; SES"]
     end
+    subgraph CLOUD["Cloud costing additions only"]
+      ALB["Operator-limited ALB ingress; 1 ALB / 1 LCU budget"]
+      NET["2 NAT gateways + 4 in-use public IPv4"]
+      EP["S3 gateway endpoint; no endpoint fee"]
+      LLM["Bedrock costing proxies: Nova Lite + Titan embeddings"]
+    end
+    B -->|"cloud access"| ALB
+    ALB --> S
+    A -->|"cloud outbound APIs"| NET
+    G -->|"cloud model APIs"| NET
+    NET --> LLM
+    S -->|"cloud S3 route"| EP
+    EP --> O
     S --> O
     S --> P
     S --> R
@@ -214,36 +227,44 @@ flowchart LR
     MAIL --> U["User email"]
     IMG --> S
     IMG --> G
-    C["External Colab runner"] -->|"verified artifact bundle"| A
+    C["Colab runner; cloud: EC2 g5.xlarge, 40h/month"] -->|"verified artifact bundle"| A
 ```
 
 ## 6.2 Infra
 
-Agreed local stack: DVC, S3-compatible storage, Airflow, MLflow, and PostgreSQL. The table specifies design-level topology; additional framework/monitoring choices are assumptions for later labs.
+Agreed local stack: DVC, S3-compatible storage, Airflow, MLflow, and PostgreSQL. Local inference and user-started Colab remain the actual execution plan. The cloud column is a separate full-cloud costing scenario; additional framework/monitoring choices are assumptions for later labs.
 
 | Function | Local / external | Hypothetical cloud equivalent | Stage |
 |---|---|---|---|
 | Raw data, masks, models, reports | MinIO-compatible pgsty/silo from the reference PDF; ARM image compatibility is pending | [Amazon S3](https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html) | Lab 2 |
 | Raster artifact versions | DVC + S3 remote | The same DVC, with an S3 remote | Lab 2 |
 | Batch orchestration | Airflow | [Amazon MWAA](https://docs.aws.amazon.com/mwaa/latest/userguide/what-is-mwaa.html) | Lab 2 |
-| Jobs / metadata | PostgreSQL | [RDS PostgreSQL](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_PostgreSQL.html) | Labs 2/4 |
-| Tracking / registry | MLflow + PostgreSQL backend + S3 artifacts | [SageMaker managed MLflow](https://docs.aws.amazon.com/sagemaker/latest/dg/mlflow.html); S3 artifact bucket | Lab 2 |
-| Training / annotation | User-started Colab | GPU compute is costed separately; this hybrid scenario retains Colab | Lab 2 |
-| Segmentation/job API + UI | Proposed FastAPI, a small HTML page, and model worker | EKS containers | Lab 4 |
-| GIS assistant API | Separate service, provisionally FastAPI | EKS containers; LLM backend not selected | Labs 3/4 |
-| Runtime deployment | Docker / Minikube | [Amazon EKS](https://docs.aws.amazon.com/eks/latest/userguide/what-is-eks.html) | Lab 4 |
+| Jobs / metadata | PostgreSQL | [RDS PostgreSQL](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_PostgreSQL.html), one t4g.medium Single-AZ instance shared with the retrieval index | Labs 2/4 |
+| Tracking / registry | MLflow + PostgreSQL backend + S3 artifacts | [SageMaker managed MLflow](https://docs.aws.amazon.com/sagemaker/latest/dg/mlflow.html), with its own managed backend and an S3 artifact bucket | Lab 2 |
+| Training / annotation | User-started Colab | On-demand [EC2 g5.xlarge](https://aws.amazon.com/ec2/instance-types/g5/) GPU runner, 40 h/month assumed for annotation/fine-tuning/evaluation; an alternative to Colab, not an additional local requirement | Lab 2 |
+| Segmentation/job API + UI | Proposed FastAPI, a small HTML page, and model worker | EKS containers on the shared CPU worker | Lab 4 |
+| GIS assistant API | Separate service, provisionally FastAPI | EKS containers; cloud model API usage costed separately | Labs 3/4 |
+| Runtime deployment | Docker / Minikube | [Amazon EKS](https://docs.aws.amazon.com/eks/latest/userguide/what-is-eks.html), with one m5.xlarge CPU worker for the two APIs and scheduled jobs | Lab 4 |
 | Container registry | Minikube registry | ECR | Lab 4 |
 | Drift reports | Proposed Evidently job | Costed as an EKS job; managed alternative: SageMaker Model Monitor, not a separately included service | Lab 4 |
 | Metrics / dashboard | Proposed Prometheus/Grafana | CloudWatch | Lab 4 |
-| Retrieval index | Proposed pgvector in the same PostgreSQL | Selected scenario: RDS with pgvector; course-table managed alternative: OpenSearch Serverless vector search, excluded from the estimate | Lab 3 |
+| Retrieval index | Proposed pgvector in the same PostgreSQL | pgvector on the same RDS t4g.medium instance; course-table managed alternative: OpenSearch Serverless vector search, excluded from the estimate | Lab 3 |
+| LLM / embedding backend | Actual local model/backend remains undecided | [Amazon Bedrock](https://aws.amazon.com/bedrock/pricing/), Nova Lite and Titan Text Embeddings V2 as explicit costing proxies only | Lab 3 |
+| User ingress | Loopback access to the local API/UI | [Application Load Balancer](https://aws.amazon.com/elasticloadbalancing/pricing/), one ALB with a 1-LCU costing envelope; access limited to the operator | Lab 4 |
+| Outbound networking / addresses | Local host networking | [Amazon VPC](https://aws.amazon.com/vpc/pricing/), two zonal NAT gateways and four in-use public IPv4 addresses, assumed two for NAT and two for the ALB | Cloud costing only |
+| S3 route | Local S3-compatible endpoint | [S3 gateway endpoint](https://docs.aws.amazon.com/vpc/latest/privatelink/vpc-endpoints-s3.html); no endpoint charge | Cloud costing only |
 | Email adapter | SMTP credentials in local secrets | SES | Lab 4 |
 | Feature store | Not needed: raster artifacts without online entity features | No separate managed feature store | All |
 
 The two containerized application services are the segmentation/job API and GIS assistant API. Each has its own readiness contract: segmentation requires a valid checkpoint/preprocessing manifest; the assistant requires model-backend/embedding configuration and an available corpus index. Missing required model artifacts must fail probes. HTTP liveness alone does not establish readiness.
 
+The cloud scenario is deliberately small: one CPU worker and Single-AZ RDS do not provide application high availability, and their capacity is not benchmarked. The 40 GPU hours are a costing allowance, not a claim that a particular teacher or training run fits. Bedrock proxy names establish priced model inputs without selecting the actual project models. In the cloud alternative, the GPU runner returns the same checked artifact bundle as Colab; the approved local/Colab workflow is unchanged.
+
+Cloud administrative access remains restricted; MLflow is not exposed as a public user endpoint. AWS service APIs use IAM-authenticated public endpoints over the modeled outbound route. The S3 gateway endpoint supplies the S3 route; paid interface endpoints are not silently included. Public ALB access is operator-limited and does not introduce a public multi-user product or a new SLA. The cloud labels and network additions are hypothetical deployment/cost inputs, not components already running locally.
+
 [FastAPI](https://fastapi.tiangolo.com/) is a proposed framework, not an installed dependency. Reference-stack versions in the PDF are course requirements/guidance; ARM/Python compatibility is unverified, so runtime dependencies are not added in Lab 1.
 
-Lab 1 verification on 2026-10-22: setup, lint, pre-commit configuration/all-file checks, and lock consistency passed in a clean temporary copy with Python 3.12.13, Ruff 0.17.2, and pre-commit 4.7.0. Source files were unchanged. The three Mermaid diagrams rendered and passed visual review. A published clean clone and green default-branch CI remain unverified.
+Lab 1 verification: local checks on 2026-10-22 passed in a clean temporary copy with Python 3.12.13, Ruff 0.17.2, and pre-commit 4.7.0. A subsequent genuine clean clone of published commit `934858b` passed setup/lint and pre-commit checks; lint CI was green on branch `lab1`. This does not satisfy the separate green-default-branch gate for `main`. All three diagrams, including the updated cloud labels, rendered successfully and passed visual review during apply.
 
 ## 6.3 Performance
 
@@ -298,44 +319,48 @@ Inference class fractions use only the observed-valid input domain. Without GT, 
 
 ## 6.7 Cost
 
-The agreed actual budget is **$0 in paid services**, using local execution and available Colab. Electricity and owned hardware are not estimated as a cloud bill.
+The actual paid-service budget remains **$0**: local serving and available Colab are the implementation plan. The estimate below prices a complete, small AWS alternative, including recurring GPU model work and an LLM backend. It does not authorize deployment or change the actual model/backend choice.
 
-Parametric model:
+**Saved provider estimate:** [AWS Pricing Calculator: KSE MLOps GIS](https://calculator.aws/#/estimate?id=52dedcbc1a8747f5028990e050593d9dab6c4ac1), ID `52dedcbc1a8747f5028990e050593d9dab6c4ac1`. Calculated and verified on **2026-10-23, Europe/Kyiv**; the estimate metadata timestamp is `2026-10-22T21:03:48.822Z` in UTC. Region: **US East (N. Virginia), us-east-1**. Currency: USD before taxes. The result is **$1,229.81/month**, **$0 upfront**, or **$14,757.72 for 12 identical months**. No reservation commitments, promotional credits, or paid support plan are selected.
 
-```text
-C_month = sum(H_service * rate_hour)
-        + V_persistent * rate_GB_month
-        + V_temporary_avg * rate_GB_month
-        + request_cost + network_cost + logs_metrics_email_cost
-        + H_GPU_training * rate_GPU + C_LLM_backend
-V_temporary_avg ≈ uploads_per_day * average_input_and_output_GB * retention_days
-```
+**Workload and capacity assumptions, not measurements:**
 
-Do not add C_LLM_backend again when shared-worker CPU/RAM already pays for it. GPU-run count and annotation/fine-tuning time are unknown; full cloud training is excluded from the hybrid scenario below, rather than estimated at zero.
+- 1,000 GIS images/month, one active segmentation job; average 50 MB input and 50 MB output per job. With 24h retention this gives about 3.3 GB average temporary storage, rounded up to 4 GB, plus 250 GB persistent datasets/models/reports: 254 GB S3 Standard total.
+- One Linux/shared `m5.xlarge` CPU worker, 4 vCPU/16 GiB, for the two APIs and scheduled monitoring; one EKS standard-support cluster. One worker and Single-AZ RDS do not provide an HA guarantee. Capacity and latency remain unbenchmarked.
+- One Linux/shared `g5.xlarge` GPU worker for a total budget of 40 hours/month, provisionally 8 hours annotation and 32 hours training/evaluation. Initial training and subsequent updates consume this budget; extra experiments or longer runs increase it. The 100 GB GPU scratch volume is deleted after runs; the CPU worker retains 50 GB gp3.
+- 1,000 assistant tasks/month, with 3,000 model calls including tool turns/retries/evaluation. The calculator's integer request-rate inputs are represented conservatively by 3,600 calls/month, 20% headroom: 1 request/minute for 2 hours/day over 30 days, with 4,000 input and 800 output tokens/call. This is 14.4M input and 2.88M output tokens. Amazon Nova Lite is a **costing proxy**, not the approved project model. Titan Text Embeddings V2 is a separate proxy for 1.1M text tokens/month. Images are not sent to these text-backend proxies.
+- 10,000 S3 PUT and 100,000 GET requests/month; 50 GB S3 Internet result downloads, counted once. 5 GB ECR images; 5 GB standard log ingestion with one-month retention, 10 custom metrics, one dashboard, three standard-resolution alarm metrics, and 100 plain alert emails/month.
+- Always-on infrastructure uses the calculator's 730-hour month. The MLflow form uses 24 hours/day and 30.42 days/month, giving 730.08 hours after its rounding. These are billing inputs, not an availability commitment for the actual local service.
 
-**Preliminary numerical scenario:** AWS us-east-1, 730 h/month, a 24/7 managed-cloud equivalent for serving/operations, no discounts/credits, USD before taxes. This is a calculated alternative, not a change to agreed on-demand availability or a recommendation to pay for deployment. One CPU worker with 4 vCPU/16 GiB is a capacity assumption, not a segmentation+LLM benchmark.
+| Component | Selected calculator inputs | USD/month |
+|---|---|---:|
+| EKS control plane | 1 standard-support cluster, 730h | 73.00 |
+| CPU serving/operations | 1 m5.xlarge, Linux/shared On-Demand, 730h | 140.16 |
+| GPU annotation/training/evaluation | 1 g5.xlarge, Linux/shared On-Demand, 40h | 40.24 |
+| EBS gp3 | 50 GB for 730h + 100 GB for 40h; baseline IOPS/throughput | 4.40 |
+| MWAA | Small, included worker/schedulers/web servers, 10 GB metadata; no extra scale-out hours | 358.70 |
+| Managed MLflow | 1 Small tracking server, 730.08h, 1 GB metadata | 438.15 |
+| RDS PostgreSQL jobs/index | 1 db.t4g.medium, Single-AZ, On-Demand, full-month utilization; 20 GB gp3 | 49.75 |
+| S3 storage and requests | 254 GB Standard, 10k PUT, 100k GET | 5.93 |
+| S3 Internet transfer | 50 GB outbound; no duplicate EC2/ECR egress | 4.50 |
+| ECR | 5 GB private images, same-region pulls | 0.50 |
+| CloudWatch | Logs, retention, metrics, dashboard and alarms specified above | 5.82 |
+| SES | 100 outbound emails, no attachments or add-ons | 0.01 |
+| LLM and embeddings | Nova Lite $1.56 + Titan Embeddings V2 $0.02, on-demand text workloads | 1.58 |
+| Application Load Balancer | 1 ALB, 730h, 1 average LCU costing envelope | 22.27 |
+| NAT gateways | 2 zonal gateways, 730h each, 50 GB processed per gateway = 100 GB total | 70.20 |
+| Public IPv4 | 4 in-use addresses, 730h each: 2 NAT + assumed 2 ALB addresses | 14.60 |
+| **Total** | **18 calculator entries, grouped above; $0 upfront** | **1,229.81** |
 
-| Item | Input / rate | USD/month | Rate evidence |
-|---|---|---:|---|
-| EKS standard control plane | 730 × 0.10 | 73.00 | [EKS pricing](https://aws.amazon.com/eks/pricing/) |
-| EC2 worker m5.xlarge | 730 × 0.192 | 140.16 | [AWS sample snapshot June 2026](https://aws-samples.github.io/sample-apex-skills/docs/skills/eks/eks-cost-intelligence/references/cost-estimation-fallback/); regional recheck required |
-| Worker EBS gp3 | 50 GB × 0.08 | 4.00 | [EBS](https://aws.amazon.com/ebs/volume-types/) |
-| MWAA small | 730 × 0.49 | 357.70 | [MWAA pricing example](https://aws.amazon.com/managed-workflows-for-apache-airflow/pricing/) |
-| MWAA metadata storage | 10 GB × 0.10 | 1.00 | Same source; does not duplicate the RDS jobs database |
-| Managed MLflow small + metadata | 730 × 0.60 + 1 GB × 0.10 | 438.10 | [SageMaker pricing, MLflow example](https://aws.amazon.com/sagemaker/ai/pricing/); arithmetic recalculated independently, regional rate still requires calculator confirmation |
-| RDS PostgreSQL jobs/index | 730 × 0.016 + 20 GB × 0.115 | 13.98 | **Rate assumption**, not yet calculator-confirmed; [RDS pricing](https://aws.amazon.com/rds/postgresql/pricing/) |
-| S3 | 100 GB × 0.023 + 10k PUT × 0.005/1k + 100k GET × 0.0004/1k | 2.39 | [S3 pricing](https://aws.amazon.com/s3/pricing/); regional calculator confirmation required |
-| ECR | 5 GB × 0.10 | 0.50 | [ECR pricing](https://aws.amazon.com/ecr/pricing/) |
-| CloudWatch | 5 GB ingest × 0.50 + 5 GB stored × 0.03 + 10 metrics × 0.30 | 5.65 | [CloudWatch examples](https://aws.amazon.com/cloudwatch/pricing/) |
-| Network | 2 NAT × 730 × 0.045 + 10 GB × 0.045 + 2 IPv4 × 730 × 0.005 | 73.45 | [VPC pricing](https://aws.amazon.com/vpc/pricing/); NAT regional rate is an assumption pending calculator confirmation |
-| SES | 100 email × 0.10/1000 | 0.01 | [SES pricing](https://aws.amazon.com/ses/pricing/) |
-| **Preliminary scenario subtotal** | Manual arithmetic, including unconfirmed rates | **1109.94** | **Not a calculator-validated quote** |
+**Topology and accounting:** two private/public subnet pairs support MWAA across two AZs; zonal NAT routes stay in the corresponding AZ. A free S3 gateway endpoint carries same-region S3 traffic. The ALB is the user ingress, restricted to the operator network; administrative services remain private. Standard public AWS service APIs use IAM-authorized access through the costed NAT path, rather than additional PrivateLink endpoints. The 100 GB NAT budget includes external imagery/checkpoint retrieval and AWS API traffic. ALB capacity assumes 1 GB/hour processed by EC2/IP targets, equivalent to a conservative average 1 LCU; it is not a measured traffic forecast. Four public IPv4 addresses are an explicit allocation assumption, not a guarantee of the ALB's future address count.
 
-Network assumption: 2 AZ for MWAA, 2 NAT gateways, private administrative access without a public ALB; same-region S3, total internet egress <100 GB/month within the available account-level allowance. If interface endpoints are needed, add their ENI-hour/data cost: example 4 endpoints × 2 AZ × 730 × $0.01 + 10 GB × $0.01 = $58.50. Endpoint count, cross-AZ traffic, backups, public ingress, and exact routing are undetermined; do not automatically add interchangeable network paths. The standard EKS control plane is already included; additional EKS capabilities and CloudWatch dashboard/alarm charges follow the selected configuration. [MWAA VPC](https://docs.aws.amazon.com/mwaa/latest/userguide/vpc-create.html), [PrivateLink](https://aws.amazon.com/privatelink/pricing/).
+Managed MLflow pays for its own metadata backend. The RDS instance stores jobs/retrieval and is not charged again for MLflow metadata. The CPU worker handles API/monitoring work; Bedrock pays for LLM/embedding compute, so no second GPU LLM server is included. RDS assumes no burst CPU-credit overage; sustained load requires a new estimate or a different instance. Existing DNS is assumed; new domain registration, separately managed identity services, cross-AZ data transfer, extra backups/snapshots, extra endpoints, premium monitoring, support and taxes are outside this scenario. Uploads can go directly to S3; S3 result egress is not added again to EC2 or NAT as Internet output. No resource or throughput benchmark establishes that these capacities meet a production SLA.
 
-The worker pays for the segmentation API, GIS assistant API, CPU model backend, and drift-report jobs within assumed capacity. Managed MLflow has its own backend; the costed RDS is for jobs/retrieval, not a second charge for MLflow metadata. Worker/RDS suitability for the future LLM is unverified. Full cloud GPU training, API LLM usage, additional GPU serving, support, taxes, and allowance overruns are excluded.
+**Calculator behavior retained:** the GPU EBS entry rounds 40/730 instance-months to 0.05 and returns $0.40; MLflow rounds its day input as noted above. CloudWatch applies its stored-log compression factor and dashboard allowance. The S3 transfer calculation charges $4.50 for 50 GB; no additional shared 100 GB account allowance is manually subtracted. The table preserves the calculator's figures and per-entry rounding rather than replacing them with hand-adjusted totals.
 
-**Calculator requirement status:** [AWS Pricing Calculator](https://calculator.aws/) appeared as a JavaScript app without a usable form in the web reader. During apply on 2026-10-22, native Chrome opened the calculator, but interactive access was canceled before an estimate was obtained. No saved estimate/export or estimate ID exists. This records an interrupted verification attempt, not a claim that AWS is permanently unavailable. Before Lab 1 submission, reproduce the stated inputs in the provider calculator, verify EC2/RDS/managed MLflow/NAT/network topology and dashboard/alarm choices, and record the date, estimate URL/ID, and total in 6.7. The current table must not be marked as a completed calculator-backed estimate. This remains an explicit incomplete delivery gate.
+**Verification method:** interactive browser access was canceled. The estimate was instead calculated with the official calculator's published JavaScript calculation engine and current official regional pricing assets, serialized using its export converter, and saved through its public estimate service. The saved estimate was fetched back from AWS and independently recalculated from all 18 saved input configurations: no required-input/read-only errors, every individual cost unchanged, total $1,229.81 and upfront $0. Browser rendering was not visually verified. Saved links are public and remain valid for one year under the [AWS sharing policy](https://docs.aws.amazon.com/pricing-calculator/latest/userguide/save-share-estimate.html); the workload and table above preserve the essential inputs.
+
+For sensitivity analysis, use `monthly cost = fixed managed services + CPU/GPU runtime + storage/requests + network + monitoring/email + LLM/embedding usage`. Incremental GPU compute is $1.006/hour at the selected rate, plus scratch storage; token rates, processing hours and data volumes must be recalculated when the workload changes. MWAA and managed MLflow together account for $796.85/month, about 65% of this scenario. The old $1,109.94 manual subtotal is superseded by this saved, broader scenario.
 
 ## 6.8 Integration points
 
@@ -395,7 +420,7 @@ LLM scenario: a request such as “prepare a GeoTIFF for QGIS,” together with 
 | Incorrect GIS coordinates | Validated CRS/affine only, round trip; pixel result if georeferencing is absent |
 | LLM errors / obeying document instructions | Retrieval citations, deterministic tool validators, restricted tools, evaluation; no delegated promotion |
 | Email delivery failure / false drift | Deduplication, explicit insufficient-data state, Lab 4 injected shift with actual email receipt |
-| Incomplete cloud estimate / insufficient capacity | Calculator gate, separate unknown costs, benchmark; retain $0 actual expenditure |
+| Estimate becomes stale / capacity assumptions fail | Preserve inputs, refresh the saved estimate when usage changes, benchmark before deployment; retain $0 actual expenditure |
 | Reused source imagery / licensing | Provenance/attribution and overlap audit; briefly record explicit restrictions and do not redistribute data without permission |
 
 ## 7.1 Alternatives
