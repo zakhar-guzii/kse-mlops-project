@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 530" width="1000" height="530" role="img" aria-labelledby="title desc">
+  <title id="title">System context of the land-cover segmentation system</title>
+  <desc id="desc">One system box. On the left, OpenEarthMap authors send RGB images and human masks, IGN FLAIR-HUB sends labelled batches, USGS and UGRC NAIP optionally send unlabelled RGB tiles, and documentation publishers send papers, data specifications and QGIS documentation. On the right, the GIS user uploads images and receives the mask package, and the operator receives alerts and candidate reports by email and sends training batches, approvals and rollbacks.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1f2937"/>
+    </marker>
+  </defs>
+  <style>
+    text { font-family: Helvetica, Arial, sans-serif; fill: #111827; }
+    .name { font-size: 16px; font-weight: 700; }
+    .sub { font-size: 14px; fill: #374151; }
+    .label { font-size: 13px; fill: #1e3a8a; }
+    .ext { fill: #f3f4f6; stroke: #4b5563; stroke-width: 1.5; }
+    .sys { fill: #e0ecff; stroke: #1e40af; stroke-width: 2.5; }
+    .flow { stroke: #1f2937; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+    .foot { font-size: 12px; letter-spacing: 1px; fill: #6b7280; }
+  </style>
+  <rect width="1000" height="530" fill="#ffffff"/>
+
+  <!-- Upstream owners -->
+  <rect class="ext" x="15" y="40" width="190" height="70" rx="6"/>
+  <text class="name" x="110" y="70" text-anchor="middle">OpenEarthMap</text>
+  <text class="sub" x="110" y="92" text-anchor="middle">authors</text>
+
+  <rect class="ext" x="15" y="150" width="190" height="70" rx="6"/>
+  <text class="name" x="110" y="180" text-anchor="middle">IGN</text>
+  <text class="sub" x="110" y="202" text-anchor="middle">FLAIR-HUB</text>
+
+  <rect class="ext" x="15" y="260" width="190" height="70" rx="6"/>
+  <text class="name" x="110" y="290" text-anchor="middle">USGS / UGRC</text>
+  <text class="sub" x="110" y="312" text-anchor="middle">NAIP imagery</text>
+
+  <rect class="ext" x="15" y="370" width="190" height="70" rx="6"/>
+  <text class="name" x="110" y="400" text-anchor="middle">Documentation</text>
+  <text class="sub" x="110" y="422" text-anchor="middle">publishers</text>
+
+  <line class="flow" x1="207" y1="75" x2="393" y2="75"/>
+  <text class="label" x="300" y="49" text-anchor="middle">RGB images,</text>
+  <text class="label" x="300" y="65" text-anchor="middle">human masks</text>
+
+  <line class="flow" x1="207" y1="185" x2="393" y2="185"/>
+  <text class="label" x="300" y="159" text-anchor="middle">labelled batches:</text>
+  <text class="label" x="300" y="175" text-anchor="middle">RGB + expert masks</text>
+
+  <line class="flow" x1="207" y1="295" x2="393" y2="295"/>
+  <text class="label" x="300" y="269" text-anchor="middle">unlabelled RGB tiles</text>
+  <text class="label" x="300" y="285" text-anchor="middle">(optional)</text>
+
+  <line class="flow" x1="207" y1="405" x2="393" y2="405"/>
+  <text class="label" x="300" y="379" text-anchor="middle">papers, data specs,</text>
+  <text class="label" x="300" y="395" text-anchor="middle">QGIS documentation</text>
+
+  <!-- The system -->
+  <rect class="sys" x="395" y="30" width="230" height="420" rx="10"/>
+  <text class="name" x="510" y="215" text-anchor="middle">Land-cover</text>
+  <text class="name" x="510" y="237" text-anchor="middle">segmentation system</text>
+  <text class="sub" x="510" y="267" text-anchor="middle">ingests, trains,</text>
+  <text class="sub" x="510" y="285" text-anchor="middle">serves, monitors</text>
+
+  <!-- Consumer and alert recipient -->
+  <rect class="ext" x="795" y="60" width="190" height="110" rx="6"/>
+  <text class="name" x="890" y="108" text-anchor="middle">GIS user</text>
+  <text class="sub" x="890" y="130" text-anchor="middle">consumer, in QGIS</text>
+
+  <line class="flow" x1="793" y1="95" x2="627" y2="95"/>
+  <text class="label" x="710" y="69" text-anchor="middle">image upload</text>
+  <text class="label" x="710" y="85" text-anchor="middle">(PNG, JPEG, GeoTIFF)</text>
+
+  <line class="flow" x1="627" y1="140" x2="793" y2="140"/>
+  <text class="label" x="710" y="160" text-anchor="middle">mask, overlay, legend,</text>
+  <text class="label" x="710" y="176" text-anchor="middle">metadata, GeoTIFF</text>
+
+  <rect class="ext" x="795" y="280" width="190" height="110" rx="6"/>
+  <text class="name" x="890" y="328" text-anchor="middle">Operator</text>
+  <text class="sub" x="890" y="350" text-anchor="middle">alert recipient</text>
+
+  <line class="flow" x1="627" y1="310" x2="793" y2="310"/>
+  <text class="label" x="710" y="284" text-anchor="middle">alerts, candidate</text>
+  <text class="label" x="710" y="300" text-anchor="middle">reports (email)</text>
+
+  <line class="flow" x1="793" y1="360" x2="627" y2="360"/>
+  <text class="label" x="710" y="380" text-anchor="middle">training batches,</text>
+  <text class="label" x="710" y="396" text-anchor="middle">approval, rollback</text>
+
+  <text class="foot" x="500" y="500" text-anchor="middle">ONE BOX. EVERYTHING OUTSIDE IT BELONGS TO SOMEONE ELSE</text>
+</svg>
