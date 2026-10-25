@@ -33,8 +33,8 @@ The [lint workflow](.github/workflows/lint.yml) runs `make setup` and `make lint
 | Property | Evidence a reviewer checks | Added in |
 |---|---|---|
 | Repository reproducible from a clean clone | Published commit `934858b` (2026-10-22) passed setup, lint, pre-commit and lock checks in a genuine clean clone; its [lab1 push CI passed](https://github.com/zakhar-guzii/kse-mlops-project/actions/runs/39848904192). The submitted commit is checked again at submission | Lab 1 |
-| Design document exists and is current | [docs/design.md](docs/design.md): sections 1–7.4, explicit assumptions, three SVG diagrams and a recalculated cloud estimate in section 6.7; the AWS Pricing Calculator link is pending | Lab 1 |
+| Design document exists and is current | [docs/design.md](docs/design.md): sections 1–7.4, explicit assumptions, three SVG diagrams and a [saved AWS Pricing Calculator estimate](https://calculator.aws/#/estimate?id=5149b216245db885ab6f9aa1f752302f6d636b13), reconciled in the [verification log](docs/verification.md) | Lab 1 |
 
 ## Submission status
 
-The latest document checks are in the [verification log](docs/verification.md). Remaining steps: the saved AWS Pricing Calculator estimate, publication, green CI on the default branch, a clean-clone check of the submitted commit, and the `lab-1` tag.
+The latest document checks are in the [verification log](docs/verification.md). Remaining submission steps: publish these changes, obtain green CI on the default branch, check the submitted commit from a clean clone, and create the `lab-1` tag.

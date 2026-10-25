@@ -16,19 +16,19 @@ English stays canonical. The Ukrainian file is a local translation.
 
 ## Goals / Non-Goals
 
-**Goals:** close every partial item, state each fact once, and keep every Lab 1 structural requirement.
+**Goals:** close every partial item, remove repeated explanations, and keep every Lab 1 structural requirement.
 
 **Non-Goals:**
 
 - New system behavior or changes to the selected stack, models, data or costs.
-- Saving the calculator estimate on the user's behalf.
+- Provisioning AWS resources or incurring cloud charges.
 - Editing archived changes, research notes or ignore rules.
 
 ## Decisions
 
-### 1. One statement per fact
+### 1. One home for each explanation
 
-Each fact lives in one section. Other sections reference it as "(Section X)" or drop it. The only exception is a number that Lab 1 requires both as a §3 metric and as a §4 NFR.
+Each detailed explanation lives in one section. Other sections reference it as "(Section X)". Keep short summaries where the Lab 1 structure needs them: overview, metrics, requirements, risks and alternatives.
 
 | Fact | Home |
 |---|---|
@@ -70,9 +70,9 @@ Editorial changes:
 
 ### 3. Drift reference windows (S1)
 
-One assumption sentence goes into §6.6:
+Assumptions for §6.6:
 
-- **Input statistics.** Compare the last 7 days with a frozen snapshot of the first 14 days of service (at least 100 images). The operator replaces the snapshot only after accepting a reviewed shift as normal.
+- **Input statistics.** Compare the last 7 days with a frozen snapshot of the first 14 days of service. The operator replaces the snapshot only after accepting a reviewed shift as normal.
 - **Predicted class shares.** These depend on the model, so the reference is the first 7 days after each `champion` activation (at least 50 images).
 - **PSI threshold.** 0.25 is checked against the PSI between the two 7-day halves of the input reference.
 - **Too little data.** With an incomplete reference or fewer than 50 images, the report says "insufficient data".
@@ -180,12 +180,12 @@ It also records this change's checks. `934858b` is never presented as evidence f
 
 ### 10. Calculator (items 7, 32)
 
-The user saves the estimate from the archived [calculator inputs](../archive/2026-10-24-rewrite-lab1-design/calculator-inputs.md). The link then replaces the pending sentence in §6.7 and in README. The log compares the saved totals with $301.75 and $338.25.
+Save the estimate from the archived [calculator inputs](../archive/2026-10-24-rewrite-lab1-design/calculator-inputs.md). The user has authorized saving its public share link. Replace the pending status in §6.7 and README after verifying the saved estimate. The log compares its totals with $301.75 and $338.25 and explains any differences in rates, allowances or rounding.
 
 ## Risks / Trade-offs
 
 - **Removing repeats strips context from a section** → keep a "(Section X)" reference wherever a fact is used.
-- **The word target pushes out required content** → the Lab 1 structural checks gate the result; if the target is missed, report the count and what holds it.
+- **Over-shortening removes required content** → the Lab 1 structural checks gate the result; judge conciseness by repetition and clarity, with word count recorded only as context.
 - **The reference windows are untested** → mark them as assumptions; Lab 4 calibrates them.
 - **The translation drifts from English** → translate after the English text stabilizes, then compare headings, numbers and links.
 - **The estimate stays unsaved** → §6.7 keeps the pending status visible, task 3.3 stays open and the change is not archived.

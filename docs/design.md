@@ -15,7 +15,9 @@ The system has two roles:
 
 Assumption: 20 active GIS users submit 1000 images and run 1000 assistant tasks a month; Section 6.7 also prices a 2200-image case.
 
-Errors have different costs. A wrong class costs correction time in QGIS. A wrong grid or invented georeferencing puts the layer in the wrong place, so the whole export is unusable. An update that silently loses a class, such as roads, repeats that error in every later map. A notebook cannot serve these users: requests arrive from many people at any time, each map must name its model, updates need a reproducible comparison and an approval step, and quality must be watched on uploads without reference masks.
+A wrong class costs correction time in QGIS; a wrong grid or invented georeferencing makes the export unusable. Losing a class, such as roads, in a model update repeats the error in every later map.
+
+A notebook is unsuitable for a continuous multi-user service. Each result needs a model version, each update a reproducible comparison and approval, and uploads without reference masks need monitoring.
 
 ## 3 Success metrics
 
@@ -47,7 +49,7 @@ mIoU is the optimization metric: the score we try to improve. Export validity, p
 | Availability and fallback | The cloud service runs continuously. Jobs and results survive a host failure in PostgreSQL and object storage; an interrupted job is retried after its lease expires, up to 3 attempts. Without a loadable approved model, jobs wait in the queue and no mask is fabricated. An LLM provider outage returns an error and keeps the task for a retry |
 | Reproducibility | Every training run records data version, code commit, configuration, preprocessing, taxonomy version, parent model and seeds. Target: one command rebuilds any registered model version from a clean clone, and the same batch run twice gives identical row counts; bit-identical GPU weights are not required |
 | Adaptability | New batches and architectures enter as candidates trained from the approved model (Section 5.3). Assumption: the first experiments replay 50% old OEM tiles so that neither source dominates; development controls choose the final share |
-| Observability without ground truth | Uploads have no reference masks, so live IoU cannot be computed; the service monitors failures, latency, input statistics and predicted class shares (Section 6.6). IoU is computed only on labelled batches, when they arrive |
+| Observability without ground truth | Uploads have no reference masks, so live IoU cannot be computed; the service monitors failures and latency, and checks input statistics and predicted class shares daily (Section 6.6). IoU is computed only on labelled batches, when they arrive |
 | Cost and resource ceilings | Cloud service: about $302/month at listed rates, $338 in a training month (Section 6.7). Per job: 128 MiB encoded upload, 64 megapixels decoded, one worker with 1 vCPU and 4 GiB RAM, and a 15-minute deadline that never runs past the upload's expiry; these bound disk, decoding memory and work time |
 
 **Course constraint:** the same components run on one Mac (Apple M4 Pro, 24 GiB) under Minikube with one operator. The author's existing Colab Pro subscription supplies training GPUs, and the course adds no paid spend.
@@ -140,7 +142,11 @@ FLAIR therefore supervises six classes: 0, 1, 4, 5, 6 and 7. Its impervious clas
 
 Raster bytes stay in raster formats; CSV or Parquet would only add a conversion step.
 
-**Git, DVC and Git LFS.** Git holds code, configuration, documentation, `uv.lock`, JSON manifests and DVC pointers. DVC keeps rasters and checkpoints in object storage under content hashes, and `dvc pull` restores the exact data version a commit names. Git LFS also keeps large files out of Git history, but only stores and fetches them; DVC also knows pipeline stages, so it rebuilds stale derived data, and it uses the system's object storage. Git LFS is therefore not used. Manifests are JSON: small, readable and diffable.
+**Git, DVC and Git LFS.** Git stores code, configuration, documentation, `uv.lock`, JSON manifests and DVC pointers.
+
+DVC stores rasters and checkpoints under content hashes in object storage; `dvc pull` restores the data version a commit names.
+
+Git LFS only stores and fetches large files. DVC also tracks pipeline stages and rebuilds stale derived data, so Git LFS is not used. Manifests use JSON because it is small, readable and diffable.
 
 **Retrieval corpus:**
 
@@ -156,9 +162,15 @@ Each snapshot records source URL, access date, SHA-256 and `doc_version`; each c
 
 ## 5.3 Techniques
 
-**Baseline: random forest on RGB texture features.** A per-pixel random forest over intensity, edge and texture features returns the same eight-class mask on CPU, without pretrained weights. Parameters: [`multiscale_basic_features`](https://scikit-image.org/docs/stable/api/skimage.feature.html#skimage.feature.multiscale_basic_features) at scales 1, 2, 4 and 8 px; a scikit-learn [`RandomForestClassifier`](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html) with 100 trees, depth 12 and a fixed seed; at most 10,000 valid pixels per class sampled from the OEM training regions, ID 255 removed. It is fitted directly, not through [`fit_segmenter`](https://scikit-image.org/docs/stable/api/skimage.future.html#skimage.future.fit_segmenter), because label 0 (bareland) is a valid class. Assumption: fitting takes minutes on CPU, as the sample is capped at 80,000 pixels.
+**Baseline: random forest on RGB texture features.** Each pixel is classified from intensity, edge and texture features, producing an eight-class mask on CPU without pretrained weights.
 
-The baseline could stay in production if its per-class IoU and the users' correction effort were acceptable. We expect it to confuse classes that differ by context, not colour, such as road and developed space or agriculture and rangeland.
+- [`multiscale_basic_features`](https://scikit-image.org/docs/stable/api/skimage.feature.html#skimage.feature.multiscale_basic_features) at scales 1, 2, 4 and 8 px.
+- scikit-learn [`RandomForestClassifier`](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html): 100 trees, depth 12, fixed seed.
+- At most 10,000 valid pixels per class from OEM training regions; remove ID 255.
+
+Fit directly, without [`fit_segmenter`](https://scikit-image.org/docs/stable/api/skimage.future.html#skimage.future.fit_segmenter): label 0 (bareland) is a valid class. Assumption: fitting takes minutes on CPU with at most 80,000 pixels.
+
+The baseline could remain in production if its per-class IoU and users' correction effort were acceptable. It will likely confuse context-dependent classes: road and developed space, or agriculture and rangeland.
 
 **Candidate: U-Net with an EfficientNet-B4 encoder** ([segmentation_models_pytorch](https://github.com/qubvel-org/segmentation_models.pytorch) 0.5.0):
 
@@ -167,9 +179,13 @@ smp.Unet(encoder_name="tu-tf_efficientnet_b4.in1k", encoder_weights="imagenet",
          in_channels=3, classes=8, activation=None)
 ```
 
-The encoder starts from the [timm ImageNet checkpoint](https://huggingface.co/timm/tf_efficientnet_b4.in1k) (Apache-2.0). Preprocessing divides RGB by 255 and normalizes with mean (0.485, 0.456, 0.406) and standard deviation (0.229, 0.224, 0.225); training and serving use 512×512 tiles with the same overlap and padding. On the OEM benchmark this architecture reached 68.20 mIoU with 20.3 M parameters and led with 10% of labels ([OEM Tables 3 and 5](https://arxiv.org/html/2210.10732)); that is architecture evidence, not our checkpoint's accuracy or CPU speed.
+The encoder starts from the [timm ImageNet checkpoint](https://huggingface.co/timm/tf_efficientnet_b4.in1k) (Apache-2.0).
 
-ImageNet weights initialize only the first OEM training run. Each update resumes the approved full checkpoint, including decoder and head, on the new batch mixed with replayed OEM tiles, so that the model keeps learned classes.
+Preprocessing divides RGB by 255 and normalizes with mean (0.485, 0.456, 0.406) and standard deviation (0.229, 0.224, 0.225). Training and serving use 512×512 tiles with the same overlap and padding.
+
+On the [OEM benchmark, Tables 3 and 5](https://arxiv.org/html/2210.10732), it reached 68.20 mIoU with 20.3 M parameters and led with 10% of labels. This supports the architecture choice, not our checkpoint's accuracy or CPU speed.
+
+ImageNet weights initialize only the first OEM run. Updates resume the approved full checkpoint, including decoder and head, on the new batch mixed with OEM replay to retain learned classes.
 
 **Features and their serving-time sources:**
 
@@ -182,7 +198,7 @@ ImageNet weights initialize only the first OEM training run. Each update resumes
 | CRS and affine | Not a model input | Copied from a valid uploaded GeoTIFF to the output |
 | Augmentation | Random flips and rotations of image and mask together | None |
 
-Serving accepts only 8-bit RGB: training pixels pass a fixed adapter, uploads come from any user file, and this rule keeps both paths aligned. A later adapter will convert known 16-bit and other containers to 8-bit RGB; an image with unknown band meaning is rejected unless the user names its red, green and blue bands.
+Serving accepts only 8-bit RGB. A future adapter will convert known 16-bit and other containers to 8-bit RGB. An image with unknown band meanings is rejected unless the user identifies its red, green and blue bands.
 
 **Model alternatives, revisited after the first implementation:**
 
@@ -227,7 +243,7 @@ Passing a gate makes a candidate eligible for review, not active (Section 5.5).
 - **Candidate review.** The operator receives the Section 5.4 report and up to five example overlays; only the operator promotes, by moving `champion` to the candidate. A blocked candidate stays a run artifact and never becomes the base of the next update.
 - **Override.** The operator can block a candidate that passes every gate, for example when overlays show tiling seams, or roll back by moving `champion` to any earlier approved version.
 - **Rollout.** Workers resolve `champion` at start-up, load that immutable version and record it on every job. After an alias change the operator triggers a rolling restart: old workers finish their jobs, new workers load the new version.
-- **GIS users** cannot promote models; their QGIS edits stay in their own maps (Section 6.5).
+- **GIS edits** stay in the user's own maps (Section 6.5).
 
 Lifecycle: training run → registered candidate → `champion` alias → monitoring reports → next candidate. Every approved version stays in the registry for audit and rollback.
 
@@ -265,11 +281,31 @@ Lifecycle: training run → registered candidate → `champion` alias → monito
 
 The segmentation service is ready only after loading the `champion` model and its preprocessing configuration, so a missing model fails the readiness probe; the assistant is ready only when its LLM endpoint and corpus index respond.
 
-**Training exchange.** The operator starts each training run in Colab Pro, which cannot reach the local MLflow. The run writes to Google Drive `model.pt`, `checkpoint.pt` (optimizer, scheduler, epoch and RNG state), `metrics.json` and `run.json` (commit, dataset digest, configuration, seed, weights SHA-256). The operator downloads the folder; an import command verifies the hashes, rebuilds the model on CPU from the recorded code and configuration, logs the run to MLflow and registers a version. MLflow is the authoritative record of runs, versions, approvals and traces; W&B may only stream live Colab curves (Section 7.1).
+**Training exchange.** The operator starts each training run in Colab Pro, which cannot reach local MLflow.
 
-**LLM choices.** Locally the assistant runs [Gemma 4 12B QAT Q4_0](https://huggingface.co/google/gemma-4-12B-it-qat-q4_0-gguf) through [llama.cpp](https://github.com/ggml-org/llama.cpp) on the Mac host with Metal, because Docker containers on the Mac have no GPU. Assumption: its 6.98 GB weights and context cache fit beside the Minikube stack in 24 GiB; Lab 3 measures peak memory. The cloud uses [Claude Sonnet 5.5 on Bedrock](https://platform.claude.com/docs/en/models/overview); [GPT-6.1 Sol](https://developers.openai.com/api/docs/models/gpt-6.1-sol) is a separately integrated and evaluated alternative, without automatic failover. Embeddings use [Qwen3-Embedding-0.6B](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B) locally and [Titan Text Embeddings V2](https://docs.aws.amazon.com/bedrock/latest/userguide/titan-embedding-models.html) in the cloud if it passes the Ukrainian-to-English retrieval evaluation; changing the embedding model rebuilds the index under a new version.
+Google Drive receives `model.pt`, `checkpoint.pt` (optimizer, scheduler, epoch and RNG state), `metrics.json` and `run.json` (commit, dataset digest, configuration, seed and weights SHA-256).
 
-**Cloud placement.** An always-on m6a.xlarge core host (4 vCPU, 16 GiB) runs the HTTPS proxy, both APIs, Airflow, MLflow, Prometheus, Grafana and one worker; a burst Auto Scaling group of 0–1 identical hosts adds up to three workers. The hosts sit in a public subnet without a NAT gateway, and S3 traffic uses a free gateway endpoint. Route 53 points to an Elastic IP that a replacement core host re-associates at boot, restoring its TLS certificate from a backup. A retried job runs under a new attempt ID, so a worker whose lease expired cannot publish over the retry.
+The operator downloads the folder. The import command verifies hashes, rebuilds the model on CPU from the recorded code and configuration, logs the run and registers a version in MLflow.
+
+MLflow holds runs, versions, approvals and traces; W&B is only for live Colab curves (Section 7.1).
+
+**LLM choices.** [Gemma 4 12B QAT Q4_0](https://huggingface.co/google/gemma-4-12B-it-qat-q4_0-gguf) runs through [llama.cpp](https://github.com/ggml-org/llama.cpp) with Metal on the Mac host, because Docker on this Mac has no GPU access.
+
+Assumption: its 6.98 GB weights and context cache fit beside Minikube in 24 GiB; Lab 3 measures peak memory.
+
+Cloud: [Claude Sonnet 5.5 on Bedrock](https://platform.claude.com/docs/en/models/overview). [GPT-6.1 Sol](https://developers.openai.com/api/docs/models/gpt-6.1-sol) needs separate integration and evaluation, without automatic failover.
+
+Embeddings use [Qwen3-Embedding-0.6B](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B) locally.
+
+The cloud uses [Titan Text Embeddings V2](https://docs.aws.amazon.com/bedrock/latest/userguide/titan-embedding-models.html) if it passes the Ukrainian-to-English retrieval evaluation.
+
+Changing the embedding model rebuilds the index under a new version.
+
+**Cloud placement.** The always-on m6a.xlarge core host (4 vCPU, 16 GiB) runs the HTTPS proxy, both APIs, Airflow, MLflow, Prometheus, Grafana and one worker. A burst Auto Scaling group of 0–1 identical hosts adds up to three workers.
+
+Hosts use a public subnet without a NAT gateway; S3 traffic uses a free gateway endpoint. Route 53 points to an Elastic IP that a replacement core host re-associates at boot, restoring its TLS certificate from a backup.
+
+A retry gets a new attempt ID, preventing a worker with an expired lease from publishing over it.
 
 ## 6.3 Performance
 
@@ -282,9 +318,15 @@ The segmentation service is ready only after loading the `champion` model and it
 | Service time | 60 s per reference image on one worker (decode, tiling, inference, stitching, export); the capacity input until measured |
 | Worker | One CPU thread, 512×512 tiles, batch size 1, within the Section 4 ceilings |
 
-**Worker count.** Peak arrivals are 1000 / 22 working days × 0.2 = 9.09 jobs per hour. At a target utilization of 0.6, ceil(9.09 × 60 / (3600 × 0.6)) = 1 worker covers the mean load; bursts scale to four, targeting at most 2 queued jobs per worker with a 10-minute scale-in cooldown. On the core host the services and one worker reserve 3.25 of 4 vCPU and 12.125 of 16 GiB; a burst host fits three workers. The mean-load formula gives no p95; the load test does.
+**Worker count.** Peak arrivals are 1000 / 22 working days × 0.2 = 9.09 jobs per hour. At utilization 0.6, ceil(9.09 × 60 / (3600 × 0.6)) = 1 worker covers the mean load.
 
-**Measurement method.** With the worker limited to 1 vCPU and 4 GiB, time cold start, then 30 runs at 1024×1024 and 4096×4096 after 5 warm-ups, recording stage times and peak memory. Then replay twice the peak rate for an hour and read the p95 values and queue wait. Above 5 minutes, try ONNX Runtime or larger tiles, then more workers within the cost ceiling, before relaxing the target.
+Bursts scale to four workers, targeting at most 2 queued jobs per worker with a 10-minute scale-in cooldown. The core services and one worker reserve 3.25 of 4 vCPU and 12.125 of 16 GiB; a burst host fits three workers.
+
+The mean-load formula gives no p95; the load test does.
+
+**Measurement method.** Limit a worker to 1 vCPU and 4 GiB. Time cold start, then 30 runs at 1024×1024 and 4096×4096 after 5 warm-ups, recording stage times and peak memory.
+
+Replay twice the peak rate for an hour and record p95 and queue wait. Above 5 minutes, try ONNX Runtime or larger tiles, then more workers within the cost ceiling, before relaxing the target.
 
 ## 6.4 Security
 
@@ -308,7 +350,11 @@ Uploads may show private property, people and vehicles, and a GeoTIFF reveals it
 
 All alerts email the operator: Alertmanager for application rules, CloudWatch and SNS for rules that must work when the host is down. Each alert has an event key, so one incident sends one email.
 
-Assumption: the drift rows compare the last 7 days with frozen snapshots of per-job statistics. Input statistics use the first 14 days of service and are replaced only when the operator accepts a reviewed shift as normal; predicted class shares depend on the model, so they use the first 7 days after each `champion` activation. With fewer than 50 images or an incomplete reference, the report says "insufficient data".
+Assumption: drift reports compare the last 7 days with frozen snapshots of per-job statistics.
+
+Input statistics use the first 14 days of service; the operator replaces this reference only after accepting a reviewed shift as normal. Model-dependent class shares use the first 7 days after each `champion` activation.
+
+With fewer than 50 images or an incomplete reference, the report says "insufficient data".
 
 | Signal | Window and threshold | Reason | Action |
 |---|---|---|---|
@@ -354,9 +400,13 @@ Unused recurring free allowances cover $12.52: the first 100 GB of internet outp
 | 1000 images and tasks | $301.75 | **$289.23** | $338.25 | **$325.73** |
 | 2200 images and tasks | $460.29 | $444.17 | $496.79 | $480.67 |
 
-The 2200 case scales storage to 108 GB, requests to 22,000 and 220,000, internet output to 120 GB, logs to 11 GB and LLM cost to $274.58. The LLM is 41% of the steady month, so agent token use is the assumption most likely to make this estimate wrong.
+The 2200 case uses 108 GB storage, 22,000 PUT and 220,000 GET requests, 120 GB internet output, 11 GB each of ingested and stored logs, and $274.58 of LLM calls. All other quantities stay fixed.
 
-The AWS Pricing Calculator estimate for these inputs is pending; its link will replace this sentence.
+LLM calls are 41% of the steady month, so agent token use is the assumption most likely to make this estimate wrong.
+
+[Saved AWS Pricing Calculator estimate](https://calculator.aws/#/estimate?id=5149b216245db885ab6f9aa1f752302f6d636b13), verified on 2026-10-25: $299.48 for the base group and $36.17 for training, or $335.65 together per month.
+
+The [verification log](verification.md) reconciles differences in domain charges, allowances, log storage and training disk/IPv4 accounting with the listed-rate totals above.
 
 ## 6.8 Integration points
 
@@ -372,7 +422,9 @@ No public publisher promises us freshness or availability, so we pin each source
 | API → GIS user | Job status and the result package (Section 4) | Completion p95 as in Section 3; available until `accepted_at` + 24 h, including queue and processing time | A failed job returns its reason and no partial package |
 | Service ↔ operator | Alerts and candidate reports (Section 6.6); batch, approval and rollback commands | Alerts as they fire; reviews per candidate | Each alert names the batch, run or model and the rule that fired |
 
-Example: a GIS user uploads a 4096×4096 georeferenced GeoTIFF and gets a job ID. The succeeded job's mask GeoTIFF has the same width, height, CRS and affine transform, its metadata names taxonomy v1 and model version 4, and the legend maps IDs to class names in QGIS. A 16-bit image is rejected with "unsupported bit depth: 16; convert to 8-bit RGB" until the conversion adapter exists.
+Example: a GIS user uploads a 4096×4096 georeferenced GeoTIFF and gets a job ID. The successful job's mask GeoTIFF has the same width, height, CRS and affine transform.
+
+Its metadata names taxonomy v1 and model version 4; the legend maps IDs to class names in QGIS. A 16-bit image is rejected with "unsupported bit depth: 16; convert to 8-bit RGB" until the conversion adapter exists.
 
 ## 6.9 Risks and uncertainties
 
