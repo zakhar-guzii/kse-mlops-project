@@ -30,5 +30,5 @@ None.
 
 - Files: `docs/design.md`, `docs/design.uk.md` (local, ignored), `docs/diagrams/*.svg`, `README.md`, new `docs/verification.md`.
 - No code, dependency, CI or configuration changes.
-- Sources (local, ignored): [round-2 review](../../../docs/reviews/design-round-2.md), [closure matrix](../../../docs/reviews/design-round-2-closure.md) and [Lab 1](../../../labs/lab-1.pdf).
-- Prior change: [rewrite-lab1-design](../archive/2026-10-24-rewrite-lab1-design/design.md), with its [calculator inputs](../archive/2026-10-24-rewrite-lab1-design/calculator-inputs.md).
+- Sources (local, ignored): [round-2 review](../../../../docs/reviews/design-round-2.md), [closure matrix](../../../../docs/reviews/design-round-2-closure.md) and [Lab 1](../../../../labs/lab-1.pdf).
+- Prior change: [rewrite-lab1-design](../2026-10-24-rewrite-lab1-design/design.md), with its [calculator inputs](../2026-10-24-rewrite-lab1-design/calculator-inputs.md).

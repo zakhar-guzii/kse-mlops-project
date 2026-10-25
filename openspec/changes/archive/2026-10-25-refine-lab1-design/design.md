@@ -4,7 +4,7 @@
 
 See [proposal.md](proposal.md). The design has the required 22 sections, three SVGs and a reconciled cost model.
 
-The [round-2 review](../../../docs/reviews/design-round-2.md) and its [closure matrix](../../../docs/reviews/design-round-2-closure.md) list the remaining defects:
+The [round-2 review](../../../../docs/reviews/design-round-2.md) and its [closure matrix](../../../../docs/reviews/design-round-2-closure.md) list the remaining defects:
 
 - S1–S5: missing contract details;
 - E1–E14: wording and repetition;
@@ -156,7 +156,7 @@ Local MPS fine-tuning was considered and rejected because it adds a second train
 - It restores the proxy certificate and ACME account key from an encrypted backup, starts the pinned services and waits for readiness.
 - Certificates renew through DNS-01, so port 80 stays closed.
 
-Source: [cloud research §§3–4](../../../docs/research/cloud-deployment-cost.md) (local).
+Source: [cloud research §§3–4](../../../../docs/research/cloud-deployment-cost.md) (local).
 
 ### 9. README and verification log
 
@@ -166,7 +166,7 @@ README holds:
 - Lab 1 status with a repository map;
 - setup;
 - the scorecard;
-- one status paragraph that links [docs/verification.md](../../../docs/verification.md).
+- one status paragraph that links [docs/verification.md](../../../../docs/verification.md).
 
 The log keeps the dated evidence:
 
@@ -180,7 +180,7 @@ It also records this change's checks. `934858b` is never presented as evidence f
 
 ### 10. Calculator (items 7, 32)
 
-Save the estimate from the archived [calculator inputs](../archive/2026-10-24-rewrite-lab1-design/calculator-inputs.md). The user has authorized saving its public share link. Replace the pending status in §6.7 and README after verifying the saved estimate. The log compares its totals with $301.75 and $338.25 and explains any differences in rates, allowances or rounding.
+Save the estimate from the archived [calculator inputs](../2026-10-24-rewrite-lab1-design/calculator-inputs.md). The user has authorized saving its public share link. Replace the pending status in §6.7 and README after verifying the saved estimate. The log compares its totals with $301.75 and $338.25 and explains any differences in rates, allowances or rounding.
 
 ## Risks / Trade-offs
 

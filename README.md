@@ -4,13 +4,12 @@ GIS specialists need a first land-cover layer for new aerial imagery, which they
 
 ## Lab 1 status
 
-Lab 1 delivers the system design and reproducible development tooling. Documentation, code and OpenSpec artifacts are in English, and the English design is authoritative. A Ukrainian translation (`docs/design.uk.md`) and the course PDF (`labs/lab-1.pdf`) are kept only locally and are absent from a clean clone.
+Lab 1 delivers the system design and reproducible development tooling. Documentation, code and OpenSpec artifacts are in English, and the English design is authoritative.
 
 | Path | Contents |
 |---|---|
 | [docs/design.md](docs/design.md) | The intended service, sections 1–7.4 |
 | [docs/diagrams/](docs/diagrams/) | Context, data-flow and deployment views |
-| [docs/verification.md](docs/verification.md) | Dated verification log |
 | [openspec/](openspec/) | Change proposals and acceptance criteria |
 | `pyproject.toml`, `uv.lock`, `Makefile`, `.pre-commit-config.yaml`, [.github/workflows/lint.yml](.github/workflows/lint.yml) | Reproducible setup, lint and CI |
 
@@ -26,15 +25,4 @@ uv run --locked pre-commit run --all-files
 
 `make setup` installs the locked development environment. `make lint` runs Ruff static checks without modifying files. The pre-commit configuration runs the same locked Ruff command and is retained for Lab 1 and manual checks. Automatic local Git hooks are not installed.
 
-The [lint workflow](.github/workflows/lint.yml) runs `make setup` and `make lint` on GitHub for every push and pull request. Application code will be added in later labs; currently these commands verify the development configuration and tool invocation.
-
-## Maturity scorecard
-
-| Property | Evidence a reviewer checks | Added in |
-|---|---|---|
-| Repository reproducible from a clean clone | Published commit `934858b` (2026-10-22) passed setup, lint, pre-commit and lock checks in a genuine clean clone; its [lab1 push CI passed](https://github.com/zakhar-guzii/kse-mlops-project/actions/runs/39848904192). The submitted commit is checked again at submission | Lab 1 |
-| Design document exists and is current | [docs/design.md](docs/design.md): sections 1–7.4, explicit assumptions, three SVG diagrams and a [saved AWS Pricing Calculator estimate](https://calculator.aws/#/estimate?id=5149b216245db885ab6f9aa1f752302f6d636b13), reconciled in the [verification log](docs/verification.md) | Lab 1 |
-
-## Submission status
-
-The latest document checks are in the [verification log](docs/verification.md). Remaining submission steps: publish these changes, obtain green CI on the default branch, check the submitted commit from a clean clone, and create the `lab-1` tag.
+The [lint workflow](.github/workflows/lint.yml) runs `make setup` and `make lint` on GitHub for every push and pull request. Application code will be added in later labs;
