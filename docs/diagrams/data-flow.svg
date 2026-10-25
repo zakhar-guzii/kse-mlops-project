@@ -1,0 +1,138 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 725" width="1000" height="725" role="img" aria-labelledby="title desc">
+  <title id="title">Data flow of the land-cover system on the seven layers</title>
+  <desc id="desc">Row one has two lanes. Uploads enter 1 data ingestion through the segmentation API, pass an input check of size, format and 8-bit RGB, are decoded and tiled in 2 preprocessing, and reach the online side of 3 the feature layer as tensors computed with the same configuration. Training batches from OEM and FLAIR-HUB enter through Airflow. The version point takes a raw manifest snapshot of training batches only; 2 preprocessing remaps their labels to OEM-8 and tiles them; the quality gate checks grids, class IDs and new checksums; the offline side holds the accepted dataset version committed with DVC. Training and serving diverge at the feature layer. The offline side feeds 4 the training pipeline: a Colab Pro run started by the operator, plus the random-forest baseline on CPU. A dashed manual step exports weights, metrics and lineage to Google Drive and imports them, after verification, into 5 the MLflow registry, where the promotion rule applies and the operator moves the champion alias. The online side and the alias feed 6 inference: asynchronous jobs in a PostgreSQL queue with 1 to 4 CPU workers, which return the map package to the GIS user. Inference sends input statistics, class shares and job metrics to 7 monitoring, which emails the operator; the operator schedules the next labelled batch, which loops back to training. A valid re-upload creates a new job.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1f2937"/>
+    </marker>
+  </defs>
+  <style>
+    text { font-family: Helvetica, Arial, sans-serif; fill: #111827; }
+    .name { font-size: 16px; font-weight: 700; }
+    .sub { font-size: 14px; fill: #374151; }
+    .lane { font-size: 13px; fill: #374151; }
+    .lanename { font-size: 13px; font-weight: 700; fill: #1e3a8a; }
+    .label { font-size: 13px; fill: #1e3a8a; paint-order: stroke; stroke: #ffffff; stroke-width: 5px; stroke-linejoin: round; }
+    .mark { font-size: 12px; font-weight: 700; fill: #b91c1c; letter-spacing: 0.5px; paint-order: stroke; stroke: #ffffff; stroke-width: 5px; }
+    .marksub { font-size: 12px; fill: #b91c1c; paint-order: stroke; stroke: #ffffff; stroke-width: 4px; }
+    .layer { fill: #eef4ff; stroke: #1e40af; stroke-width: 1.8; }
+    .side { fill: #ffffff; stroke: #1e40af; stroke-width: 1.2; }
+    .ext { fill: #f3f4f6; stroke: #4b5563; stroke-width: 1.5; }
+    .mon { fill: #fff7ed; stroke: #c2410c; stroke-width: 1.8; }
+    .flow { stroke: #1f2937; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+    .manual { stroke: #1f2937; stroke-width: 2; fill: none; stroke-dasharray: 7 5; marker-end: url(#arrow); }
+    .pin { stroke: #b91c1c; stroke-width: 1.5; stroke-dasharray: 4 3; fill: none; }
+    .foot { font-size: 13px; fill: #4b5563; }
+  </style>
+  <rect width="1000" height="725" fill="#ffffff"/>
+
+  <!-- Row 1: upload lane on top, training lane below -->
+  <rect class="layer" x="20" y="50" width="215" height="192" rx="8"/>
+  <text class="name" x="32" y="74">1 Data ingestion</text>
+  <rect class="side" x="32" y="90" width="191" height="60" rx="5"/>
+  <text class="lanename" x="44" y="113">uploads</text>
+  <text class="lane" x="44" y="136">segmentation API</text>
+  <rect class="side" x="32" y="162" width="191" height="60" rx="5"/>
+  <text class="lanename" x="44" y="185">training batches</text>
+  <text class="lane" x="44" y="208">OEM, FLAIR-HUB (Airflow)</text>
+
+  <rect class="layer" x="300" y="50" width="215" height="192" rx="8"/>
+  <text class="name" x="312" y="74">2 Preprocessing</text>
+  <rect class="side" x="312" y="90" width="191" height="60" rx="5"/>
+  <text class="lane" x="324" y="125">decode, 512×512 tiles</text>
+  <rect class="side" x="312" y="162" width="191" height="60" rx="5"/>
+  <text class="lane" x="324" y="185">remap labels to OEM-8,</text>
+  <text class="lane" x="324" y="208">512×512 tiles</text>
+
+  <rect class="layer" x="580" y="50" width="260" height="192" rx="8"/>
+  <text class="name" x="592" y="74">3 Feature layer (no service)</text>
+  <rect class="side" x="592" y="162" width="126" height="68" rx="5"/>
+  <text class="lanename" x="655" y="182" text-anchor="middle">offline</text>
+  <text class="lane" x="655" y="201" text-anchor="middle">accepted dataset</text>
+  <text class="lane" x="655" y="219" text-anchor="middle">version (DVC)</text>
+  <rect class="side" x="730" y="90" width="98" height="140" rx="5"/>
+  <text class="lanename" x="779" y="113" text-anchor="middle">online</text>
+  <text class="lane" x="779" y="136" text-anchor="middle">tensors from</text>
+  <text class="lane" x="779" y="155" text-anchor="middle">the upload,</text>
+  <text class="lane" x="779" y="174" text-anchor="middle">same config</text>
+
+  <line class="flow" x1="225" y1="120" x2="310" y2="120"/>
+  <line class="flow" x1="505" y1="120" x2="728" y2="120"/>
+  <line class="flow" x1="225" y1="192" x2="310" y2="192"/>
+  <line class="flow" x1="505" y1="192" x2="590" y2="192"/>
+
+  <!-- Marks -->
+  <text class="mark" x="267" y="20" text-anchor="middle">INPUT CHECK</text>
+  <text class="marksub" x="267" y="36" text-anchor="middle">size, format, 8-bit RGB</text>
+  <line class="pin" x1="267" y1="42" x2="267" y2="118"/>
+
+  <line class="pin" x1="267" y1="194" x2="267" y2="254"/>
+  <text class="mark" x="267" y="266" text-anchor="middle">VERSION POINT</text>
+  <text class="marksub" x="267" y="281" text-anchor="middle">training batches only:</text>
+  <text class="marksub" x="267" y="296" text-anchor="middle">raw manifest snapshot</text>
+
+  <line class="pin" x1="547" y1="194" x2="547" y2="254"/>
+  <text class="mark" x="547" y="266" text-anchor="middle">QUALITY GATE</text>
+  <text class="marksub" x="547" y="281" text-anchor="middle">grids, class IDs,</text>
+  <text class="marksub" x="547" y="296" text-anchor="middle">new checksums</text>
+
+  <text class="mark" x="717" y="262" text-anchor="middle">TRAINING /</text>
+  <text class="mark" x="717" y="277" text-anchor="middle">SERVING</text>
+  <text class="mark" x="717" y="292" text-anchor="middle">DIVERGE</text>
+
+  <!-- Divergence -->
+  <polyline class="flow" points="655,230 655,322 110,322 110,348"/>
+  <text class="label" x="380" y="315" text-anchor="middle">training path (offline side)</text>
+  <line class="flow" x1="779" y1="230" x2="779" y2="348"/>
+  <text class="label" x="791" y="300">serving path</text>
+  <text class="label" x="791" y="316">(online side)</text>
+
+  <!-- Row 2 -->
+  <rect class="layer" x="20" y="350" width="195" height="130" rx="8"/>
+  <text class="name" x="32" y="374">4 Training pipeline</text>
+  <text class="sub" x="32" y="400">Colab Pro run, started</text>
+  <text class="sub" x="32" y="420">by the operator;</text>
+  <text class="sub" x="32" y="440">RF baseline on CPU</text>
+
+  <rect class="layer" x="315" y="350" width="200" height="130" rx="8"/>
+  <text class="name" x="327" y="374">5 Registry and deploy</text>
+  <text class="sub" x="327" y="400">MLflow model versions,</text>
+  <text class="sub" x="327" y="420">promotion rule (§5.4);</text>
+  <text class="sub" x="327" y="440">operator moves champion</text>
+
+  <rect class="layer" x="580" y="350" width="260" height="130" rx="8"/>
+  <text class="name" x="592" y="374">6 Inference</text>
+  <text class="sub" x="592" y="400">async jobs, PostgreSQL queue,</text>
+  <text class="sub" x="592" y="420">1–4 CPU workers: tile,</text>
+  <text class="sub" x="592" y="440">predict, stitch, export</text>
+
+  <rect class="ext" x="886" y="350" width="104" height="130" rx="8"/>
+  <text class="name" x="938" y="408" text-anchor="middle">GIS user</text>
+  <text class="sub" x="938" y="432" text-anchor="middle">map package</text>
+
+  <line class="manual" x1="217" y1="415" x2="313" y2="415"/>
+  <text class="mark" x="265" y="405" text-anchor="middle">MANUAL</text>
+  <text class="label" x="265" y="436" text-anchor="middle" style="font-size:12px">Drive export,</text>
+  <text class="label" x="265" y="452" text-anchor="middle" style="font-size:12px">verified import</text>
+  <line class="flow" x1="517" y1="415" x2="578" y2="415"/>
+  <text class="label" x="547" y="405" text-anchor="middle" style="font-size:12px">by alias</text>
+  <line class="flow" x1="842" y1="415" x2="884" y2="415"/>
+  <text class="label" x="863" y="405" text-anchor="middle" style="font-size:12px">results</text>
+
+  <!-- Row 3 -->
+  <rect class="mon" x="315" y="560" width="525" height="100" rx="8"/>
+  <text class="name" x="330" y="584">7 Monitoring and retraining loop</text>
+  <text class="sub" x="330" y="608">Prometheus, Grafana, daily Evidently report:</text>
+  <text class="sub" x="330" y="628">failures, latency, input drift, class shares</text>
+  <text class="sub" x="330" y="648">→ email to the operator</text>
+
+  <line class="flow" x1="710" y1="482" x2="710" y2="558"/>
+  <text class="label" x="722" y="512">input stats, class shares,</text>
+  <text class="label" x="722" y="528">job metrics</text>
+
+  <polyline class="flow" points="313,610 110,610 110,482"/>
+  <text class="label" x="212" y="582" text-anchor="middle">operator schedules</text>
+  <text class="label" x="212" y="598" text-anchor="middle">the next labelled batch</text>
+
+  <text class="foot" x="500" y="705" text-anchor="middle">A valid re-upload creates a new job.</text>
+</svg>
