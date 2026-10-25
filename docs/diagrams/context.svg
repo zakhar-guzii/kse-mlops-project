@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 530" width="1000" height="530" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 470" width="1000" height="470" role="img" aria-labelledby="title desc">
   <title id="title">System context of the land-cover segmentation system</title>
-  <desc id="desc">One system box. On the left, OpenEarthMap authors send RGB images and human masks, IGN FLAIR-HUB sends labelled batches, USGS and UGRC NAIP optionally send unlabelled RGB tiles, and documentation publishers send papers, data specifications and QGIS documentation. On the right, the GIS user uploads images and receives the mask package, and the operator receives alerts and candidate reports by email and sends training batches, approvals and rollbacks.</desc>
+  <desc id="desc">One system box. On the left, OpenEarthMap authors send RGB images and human masks, IGN FLAIR-HUB sends labelled batches, USGS and UGRC NAIP optionally send unlabelled RGB tiles, and documentation publishers send papers, data specifications and QGIS documentation. On the right, the GIS user sends images and questions and receives the mask package and cited answers, and the operator receives alerts and candidate reports by email and sends training batches, approvals and rollbacks.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
       <path d="M0,0 L10,5 L0,10 z" fill="#1f2937"/>
@@ -14,9 +14,8 @@
     .ext { fill: #f3f4f6; stroke: #4b5563; stroke-width: 1.5; }
     .sys { fill: #e0ecff; stroke: #1e40af; stroke-width: 2.5; }
     .flow { stroke: #1f2937; stroke-width: 2; fill: none; marker-end: url(#arrow); }
-    .foot { font-size: 12px; letter-spacing: 1px; fill: #6b7280; }
   </style>
-  <rect width="1000" height="530" fill="#ffffff"/>
+  <rect width="1000" height="470" fill="#ffffff"/>
 
   <!-- Upstream owners -->
   <rect class="ext" x="15" y="40" width="190" height="70" rx="6"/>
@@ -64,12 +63,12 @@
   <text class="sub" x="890" y="130" text-anchor="middle">consumer, in QGIS</text>
 
   <line class="flow" x1="793" y1="95" x2="627" y2="95"/>
-  <text class="label" x="710" y="69" text-anchor="middle">image upload</text>
+  <text class="label" x="710" y="69" text-anchor="middle">images and questions</text>
   <text class="label" x="710" y="85" text-anchor="middle">(PNG, JPEG, GeoTIFF)</text>
 
   <line class="flow" x1="627" y1="140" x2="793" y2="140"/>
-  <text class="label" x="710" y="160" text-anchor="middle">mask, overlay, legend,</text>
-  <text class="label" x="710" y="176" text-anchor="middle">metadata, GeoTIFF</text>
+  <text class="label" x="710" y="160" text-anchor="middle">mask package,</text>
+  <text class="label" x="710" y="176" text-anchor="middle">cited answers</text>
 
   <rect class="ext" x="795" y="280" width="190" height="110" rx="6"/>
   <text class="name" x="890" y="328" text-anchor="middle">Operator</text>
@@ -83,5 +82,4 @@
   <text class="label" x="710" y="380" text-anchor="middle">training batches,</text>
   <text class="label" x="710" y="396" text-anchor="middle">approval, rollback</text>
 
-  <text class="foot" x="500" y="500" text-anchor="middle">ONE BOX. EVERYTHING OUTSIDE IT BELONGS TO SOMEONE ELSE</text>
 </svg>

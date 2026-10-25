@@ -1,10 +1,18 @@
 # KSE MLOps: Land-cover segmentation
 
-GIS specialists need a first thematic land-cover layer for new overhead imagery, which they then check and edit into a map. The system accepts an RGB aerial image of arbitrary size and returns an eight-class OpenEarthMap (OEM) mask with a colour overlay, a legend and, for georeferenced GeoTIFF input, a GeoTIFF layer on the source grid. Many users can submit images at once: an authenticated API queues each upload as a job, and CPU workers scale with the queue. The model is trained on OEM and then fine-tuned on new expert-labelled batches in acquisition-year order; an operator reviews each candidate and approves it before it serves. The desired outcome is GIS exports that open without manual repair, and model updates that are reproducible, monitored and reversible.
+GIS specialists need a first land-cover layer for new aerial imagery, which they then check and edit in QGIS. The service turns an 8-bit RGB aerial image into an eight-class OpenEarthMap (OEM) mask with a colour overlay, a legend and, for a georeferenced GeoTIFF, a GeoTIFF layer on the source grid. Authenticated users submit images of different sizes, within fixed upload limits, as asynchronous jobs, and CPU workers scale with the queue. The model is trained on OEM and fine-tuned on expert-labelled batches in acquisition-year order; an operator approves each new version before it serves. The desired outcome is GIS exports that open without manual repair, and model updates that are reproducible, monitored and reversible.
 
 ## Lab 1 status
 
-The [system design](docs/design.md) describes the GIS service, its supervised model updates and the roadmap for later labs, with three diagrams in [docs/diagrams/](docs/diagrams/). Lab 1 provides documentation and reproducible development tooling. Repository documentation, code, comments, and OpenSpec artifacts use English; the English design is authoritative. A Ukrainian translation (`docs/design.uk.md`) and the course PDF (`labs/lab-1.pdf`) are kept locally and are not tracked, so they are absent from a clean clone.
+Lab 1 delivers the system design and reproducible development tooling. Documentation, code and OpenSpec artifacts are in English, and the English design is authoritative. A Ukrainian translation (`docs/design.uk.md`) and the course PDF (`labs/lab-1.pdf`) are kept only locally and are absent from a clean clone.
+
+| Path | Contents |
+|---|---|
+| [docs/design.md](docs/design.md) | The intended service, sections 1–7.4 |
+| [docs/diagrams/](docs/diagrams/) | Context, data-flow and deployment views |
+| [docs/verification.md](docs/verification.md) | Dated verification log |
+| [openspec/](openspec/) | Change proposals and acceptance criteria |
+| `pyproject.toml`, `uv.lock`, `Makefile`, `.pre-commit-config.yaml`, [.github/workflows/lint.yml](.github/workflows/lint.yml) | Reproducible setup, lint and CI |
 
 ## Local setup
 
@@ -24,14 +32,9 @@ The [lint workflow](.github/workflows/lint.yml) runs `make setup` and `make lint
 
 | Property | Evidence a reviewer checks | Added in |
 |---|---|---|
-| Repository reproducible from a clean clone | Published commit `934858b` passed setup, lint, pre-commit, and lock checks in a genuine clean clone; its [lab1 push CI passed](https://github.com/zakhar-guzii/kse-mlops-project/actions/runs/39848904192). Green default-branch CI remains a submission gate | Lab 1 |
-| Design document exists and is current | [docs/design.md](docs/design.md): sections 1–7.4, explicit assumptions, three SVG diagrams, and a recalculated cloud estimate in section 6.7; the replacement AWS Calculator link is pending | Lab 1 |
+| Repository reproducible from a clean clone | Published commit `934858b` (2026-10-22) passed setup, lint, pre-commit and lock checks in a genuine clean clone; its [lab1 push CI passed](https://github.com/zakhar-guzii/kse-mlops-project/actions/runs/39848904192). The submitted commit is checked again at submission | Lab 1 |
+| Design document exists and is current | [docs/design.md](docs/design.md): sections 1–7.4, explicit assumptions, three SVG diagrams and a recalculated cloud estimate in section 6.7; the AWS Pricing Calculator link is pending | Lab 1 |
 
-## Verification and submission
+## Submission status
 
-- On 2026-10-22, a clean temporary copy passed `make setup`, `make lint`, pre-commit configuration validation and all-file execution, and `uv lock --check`, using Python 3.12.13, Ruff 0.17.2, and pre-commit 4.7.0. These checks did not modify source files; this was a local copy, not a remote clone.
-- A subsequent genuine clone of published commit `934858b` passed the same checks. A temporary Python error caused lint/pre-commit to fail and an installed test hook to block a commit; corrected code passed. The test hook and probe commits existed only in the temporary clone; automatic hooks in the working repository are disabled.
-- On 2026-10-23, the three Mermaid diagrams of the earlier design version rendered successfully and were visually checked, and local documentation links were checked. The revised design replaces them with SVG files.
-- On 2026-10-24, the revised design passed document checks: 22 numbered sections in English and in the local Ukrainian translation, resolving local links, the three SVG diagrams rendered at document width in headless Chrome and inspected visually, independently recomputed cost tables, `openspec validate rewrite-lab1-design --strict`, and `make lint`.
-- The [saved AWS Calculator estimate](https://calculator.aws/#/estimate?id=52dedcbc1a8747f5028990e050593d9dab6c4ac1), verified on 2026-10-23 (Europe/Kyiv), is $1,229.81/month and $0 upfront for the superseded EKS/MWAA design; it does not price the revised design. Actual paid expenditure remains $0.
-- Publication, green CI on the default branch, verification of the published commit in a clean clone, and the `lab-1` tag remain separate submission steps.
+The latest document checks are in the [verification log](docs/verification.md). Remaining steps: the saved AWS Pricing Calculator estimate, publication, green CI on the default branch, a clean-clone check of the submitted commit, and the `lab-1` tag.
