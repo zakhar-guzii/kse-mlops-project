@@ -1,0 +1,144 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="754" viewBox="0 0 1000 754" role="img" aria-labelledby="title desc">
+  <title id="title">Land-cover data flow across seven ML layers</title>
+  <desc id="desc">The assistant retrieves cited passages from the Lab 3 index. Prediction uses the same ML API as a direct upload. The API queues the job before a worker decodes and tiles the image. Online features feed inference and QGIS export. Offline features come from versioned labelled batches after a quality gate. Training produces candidates for operator review. Workers load the approved immutable model by alias. Drift emails go to the operator, who can submit new labelled data back to ingestion.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#334155"/></marker>
+  </defs>
+  <style>
+    text { font: 15px Helvetica, Arial, sans-serif; fill: #26354a; }
+    .name { font-size: 17px; font-weight: bold; fill: #162e53; }
+    g rect { fill: #eef4ff; stroke: #335582; stroke-width: 1.5; }
+    .flow { fill: none; stroke: #334155; stroke-width: 2; marker-end: url(#arrow); }
+    .label { fill: #244b75; }
+    .gate { fill: #92400e; font-weight: bold; }
+  </style>
+  <rect width="1000" height="754" fill="white"/>
+  <g transform="translate(24 16)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">GIS user with assistant</text>
+    <text x="14" y="47">“Make my mask and explain 255.”</text>
+  </g>
+
+  <g transform="translate(384 16)">
+    <rect width="256" height="80" rx="7"/>
+    <text class="name" x="14" y="24">Lab 3 document retriever</text>
+    <text x="14" y="47">Returns passages and locators</text>
+    <text x="14" y="67">from the versioned corpus.</text>
+  </g>
+
+  <g transform="translate(680 16)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">Training sources</text>
+    <text x="14" y="47">OEM and labelled FLAIR domains</text>
+  </g>
+
+  <g transform="translate(24 142)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">1 · ML prediction API</text>
+    <text x="14" y="47">Accept authorized upload,</text>
+    <text x="14" y="67">enqueue in PostgreSQL, return ID.</text>
+  </g>
+
+  <g transform="translate(680 142)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">1 · Airflow ingestion</text>
+    <text x="14" y="47">Freeze the raw manifest.</text>
+    <text x="14" y="67">This is the training version point.</text>
+  </g>
+
+  <g transform="translate(24 265)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">2 · CPU worker</text>
+    <text x="14" y="47">Claim job, decode valid RGB,</text>
+    <text x="14" y="67">tile on the source grid.</text>
+  </g>
+
+  <g transform="translate(680 265)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">2 · Preprocessing</text>
+    <text x="14" y="47">Remap masks and tile. Check</text>
+    <text x="14" y="67">hashes, grids and class IDs.</text>
+  </g>
+
+  <g transform="translate(24 388)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">3 · Online features</text>
+    <text x="14" y="47">Compute upload features with</text>
+    <text x="14" y="67">the loaded model configuration.</text>
+  </g>
+
+  <g transform="translate(680 388)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">3 · Offline features</text>
+    <text x="14" y="47">Publish gated DVC dataset</text>
+    <text x="14" y="67">and versioned tile features.</text>
+  </g>
+
+  <g transform="translate(680 510)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">4 · Training</text>
+    <text x="14" y="47">Fit CPU RF, compare with majority.</text>
+    <text x="14" y="67">B4 is the neural candidate.</text>
+  </g>
+
+  <g transform="translate(360 510)">
+    <rect width="257" height="80" rx="7"/>
+    <text class="name" x="14" y="24">5 · MLflow registry</text>
+    <text x="14" y="47">Operator reviews the candidate</text>
+    <text x="14" y="67">and sets the champion alias.</text>
+  </g>
+
+  <g transform="translate(24 510)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">6 · Inference and export</text>
+    <text x="14" y="47">Use loaded version, predict, stitch,</text>
+    <text x="14" y="67">validate grid and export.</text>
+  </g>
+
+  <g transform="translate(24 652)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">GIS user in QGIS</text>
+    <text x="14" y="47">Open package on source grid.</text>
+    <text x="14" y="67">Read version and cited answer.</text>
+  </g>
+
+  <g transform="translate(360 652)">
+    <rect width="257" height="80" rx="7"/>
+    <text class="name" x="14" y="24">7 · Monitoring</text>
+    <text x="14" y="47">Daily versioned drift report,</text>
+    <text x="14" y="67">dashboard and email alert.</text>
+  </g>
+
+  <g transform="translate(680 652)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">Operator</text>
+    <text x="14" y="47">Review shift and request labels</text>
+    <text x="14" y="67">if further evaluation is needed.</text>
+  </g>
+
+  <path class="flow" d="M283 58 H381"/>
+  <text class="label" x="306" y="48">retrieve</text>
+  <path class="flow" d="M152 97 V139"/>
+  <text class="label" x="166" y="126">predict or direct upload</text>
+  <path class="flow" d="M808 97 V139"/>
+  <path class="flow" d="M152 223 V262"/>
+  <text class="label" x="166" y="248">queued job</text>
+  <path class="flow" d="M808 223 V262"/>
+  <path class="flow" d="M152 346 V385"/>
+  <path class="flow" d="M808 346 V385"/>
+  <text class="gate" x="691" y="373">quality gate</text>
+  <text class="name" x="480" y="418" text-anchor="middle">Training and serving diverge</text>
+  <text x="480" y="443" text-anchor="middle">Online from the upload · offline from labelled data</text>
+  <path class="flow" d="M152 469 V507"/>
+  <path class="flow" d="M808 469 V507"/>
+  <path class="flow" d="M679 550 H620"/>
+  <path class="flow" d="M358 550 H285"/>
+  <text class="label" x="297" y="540">by alias</text>
+  <path class="flow" d="M152 591 V649"/>
+  <path class="flow" d="M264 591 V615 H488 V649"/>
+  <text class="label" x="286" y="608">per-image statistics and job metrics</text>
+  <path class="flow" d="M618 692 H677"/>
+  <text class="label" x="629" y="682">email</text>
+  <path class="flow" d="M939 692 H974 V182 H941"/>
+  <text class="label" transform="translate(965 474) rotate(-90)" text-anchor="middle">new labelled batch</text>
+</svg>
