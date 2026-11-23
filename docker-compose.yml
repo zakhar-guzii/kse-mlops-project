@@ -1,0 +1,104 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: landcover
+    volumes:
+      - postgres:/var/lib/postgresql/data
+      - ./sql/warehouse.sql:/docker-entrypoint-initdb.d/warehouse.sql:ro
+    healthcheck:
+      test: pg_isready -U ${POSTGRES_USER} -d landcover
+      interval: 5s
+      retries: 10
+
+  silo:
+    image: pgsty/silo:RELEASE.2026-09-16T00-00-00Z
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID}
+      MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY}
+    ports:
+      - 127.0.0.1:9000:9000
+      - 127.0.0.1:9001:9001
+    volumes:
+      - silo:/data
+
+  create-bucket:
+    image: amazon/aws-cli:2.42.0
+    depends_on: [silo]
+    environment:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint: sh -c
+    command:
+      - >-
+        for b in landcover-dvc landcover-mlflow; do
+        until aws --endpoint-url http://silo:9000 s3api head-bucket --bucket $$b
+        || aws --endpoint-url http://silo:9000 s3 mb s3://$$b; do sleep 2; done; done
+
+  # Proxies artifacts: clients need only the tracking address, no store credentials.
+  mlflow:
+    build: docker/mlflow
+    depends_on:
+      postgres:
+        condition: service_healthy
+      create-bucket:
+        condition: service_completed_successfully
+    environment:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      MLFLOW_S3_ENDPOINT_URL: http://silo:9000
+      POSTGRES_USER: ${POSTGRES_USER}
+    secrets: [mlflow_db_password]
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - >-
+        export PGPASSWORD="$$(cat /run/secrets/mlflow_db_password)";
+        exec mlflow server --host=0.0.0.0 --port=5000
+        --backend-store-uri="postgresql://$${POSTGRES_USER}@postgres/mlflow"
+        --artifacts-destination=s3://landcover-mlflow
+        --allowed-hosts=localhost:5001,127.0.0.1:5001,localhost:5000
+    ports:
+      - 127.0.0.1:5001:5000
+    healthcheck:
+      test: python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"
+      interval: 5s
+      start_period: 60s
+
+  # Development layout: one container, code and data mounted read-only from the host.
+  airflow:
+    build: docker/airflow
+    command: standalone
+    depends_on:
+      postgres:
+        condition: service_healthy
+      create-bucket:
+        condition: service_completed_successfully
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/airflow
+      WAREHOUSE_DSN: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/landcover
+      PYTHONPATH: /opt/project/src
+    ports:
+      - 127.0.0.1:8080:8080
+    healthcheck:
+      test: curl -fs http://localhost:8080/api/v2/version
+      interval: 5s
+      start_period: 120s
+    volumes:
+      - ./dags:/opt/airflow/dags:ro
+      - ./src:/opt/project/src:ro
+      - ./data:/opt/project/data:ro
+      - ./tests/fixtures:/opt/project/tests/fixtures:ro
+
+volumes:
+  postgres:
+  silo:
+
+secrets:
+  mlflow_db_password:
+    environment: POSTGRES_PASSWORD

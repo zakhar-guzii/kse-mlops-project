@@ -1,0 +1,6 @@
+[core]
+    remote = silo
+['remote "silo"']
+    url = s3://landcover-dvc
+    endpointurl = http://localhost:9000
+    verify = true

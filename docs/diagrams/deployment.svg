@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 620" width="1000" height="620" role="img" aria-labelledby="title desc">
   <title id="title">Deployment, first draft</title>
-  <desc id="desc">The Mac M4 Pro host runs Minikube, whose managed equivalent is Amazon EKS. Inside Minikube: the segmentation service with FastAPI, web UI and CPU workers (EKS); the thin text service and Lab 3 retriever (EKS); identity with per-user tokens (Amazon Cognito); object storage, Floci (S3 API) with the DVC remote (Amazon S3); PostgreSQL 16 with pgvector (RDS for PostgreSQL; OpenSearch Serverless for vectors); Airflow 3.3.1 (Amazon MWAA); MLflow 3.16.1 (SageMaker AI MLflow App); monitoring with Prometheus, Grafana, Alertmanager and Evidently (Amazon CloudWatch; SageMaker Model Monitor); the container registry (Amazon ECR). Outside Minikube on the Mac host: LLM and embeddings in a host-native llama-server with Metal, Gemma 4 12B QAT and Qwen3-Embedding-0.6B (Amazon Bedrock). Local CPU training runs on the Mac. Outside the host: optional existing Colab Pro (SageMaker Training). Blue italic names are managed AWS equivalents, given for reference; the selected cloud deployment is in Section 6.2. No arrows; Lab 4 replaces this first draft with the real topology. Feature store not needed.</desc>
+  <desc id="desc">The Mac M4 Pro host runs Minikube, whose managed equivalent is Amazon EKS. Inside Minikube: the segmentation service with FastAPI, web UI and CPU workers (EKS); the thin text service and Lab 3 retriever (EKS); identity with per-user tokens (Amazon Cognito); object storage, pgsty/silo (S3 API) with the DVC remote (Amazon S3); PostgreSQL 16 with pgvector (RDS for PostgreSQL; OpenSearch Serverless for vectors); Airflow 3.3.1 (Amazon MWAA); MLflow 3.16.1 with runs in PostgreSQL, files in a silo bucket and the registry alias champion, without authentication until Lab 4 (SageMaker AI MLflow App); monitoring with Prometheus, Pushgateway, Grafana, Alertmanager and Evidently (Amazon CloudWatch; SageMaker Model Monitor); the container registry (Amazon ECR). Outside Minikube on the Mac host: LLM and embeddings in a host-native llama-server with Metal, Gemma 4 12B QAT and Qwen3-Embedding-0.6B (Amazon Bedrock). Local CPU training runs on the Mac. Outside the host: optional Colab L4 (SageMaker Training). Blue italic names are managed AWS equivalents, given for reference; the selected cloud deployment is in Section 6.2. No arrows; Lab 4 replaces this first draft with the real topology. Feature store not needed.</desc>
   <style>
     text { font-family: Helvetica, Arial, sans-serif; fill: #111827; }
     .host { fill: #f9fafb; stroke: #374151; stroke-width: 2; }
@@ -48,7 +48,7 @@
   <!-- Row 2 -->
   <rect class="comp" x="40" y="222" width="220" height="112" rx="6"/>
   <text class="name" x="150" y="244" text-anchor="middle">Object storage</text>
-  <text class="local" x="150" y="263" text-anchor="middle">Floci (S3 API),</text>
+  <text class="local" x="150" y="263" text-anchor="middle">pgsty/silo (S3 API),</text>
   <text class="local" x="150" y="280" text-anchor="middle">DVC remote</text>
   <line class="div" x1="55" y1="291" x2="245" y2="291"/>
   <text class="managed" x="150" y="314" text-anchor="middle">Amazon S3</text>
@@ -70,15 +70,15 @@
   <!-- Row 3 -->
   <rect class="comp" x="40" y="346" width="220" height="112" rx="6"/>
   <text class="name" x="150" y="368" text-anchor="middle">MLflow</text>
-  <text class="local" x="150" y="387" text-anchor="middle">3.16.1, authentication,</text>
+  <text class="local" x="150" y="387" text-anchor="middle">3.16.1, PostgreSQL + silo,</text>
   <text class="local" x="150" y="404" text-anchor="middle">registry alias champion</text>
   <line class="div" x1="55" y1="415" x2="245" y2="415"/>
   <text class="managed" x="150" y="438" text-anchor="middle">SageMaker AI MLflow App</text>
 
   <rect class="comp" x="280" y="346" width="220" height="112" rx="6"/>
   <text class="name" x="390" y="368" text-anchor="middle">Monitoring</text>
-  <text class="local" x="390" y="387" text-anchor="middle">Prometheus, Grafana,</text>
-  <text class="local" x="390" y="404" text-anchor="middle">Alertmanager, Evidently</text>
+  <text class="local" x="390" y="387" text-anchor="middle">Prometheus, Pushgateway,</text>
+  <text class="local" x="390" y="404" text-anchor="middle">Grafana, Alertmanager, Evidently</text>
   <line class="div" x1="295" y1="415" x2="485" y2="415"/>
   <text class="managed" x="390" y="432" text-anchor="middle">Amazon CloudWatch;</text>
   <text class="managed" x="390" y="448" text-anchor="middle">SageMaker Model Monitor</text>
@@ -106,7 +106,7 @@
   <!-- External training resource -->
   <rect class="extbox" x="770" y="500" width="205" height="100" rx="6"/>
   <text class="name" x="872" y="522" text-anchor="middle">Optional neural training</text>
-  <text class="local" x="872" y="541" text-anchor="middle">Existing Colab access,</text>
+  <text class="local" x="872" y="541" text-anchor="middle">Colab L4, if available,</text>
   <text class="local" x="872" y="558" text-anchor="middle">outside the host</text>
   <line class="div" x1="785" y1="569" x2="960" y2="569"/>
   <text class="managed" x="872" y="588" text-anchor="middle">SageMaker Training</text>
