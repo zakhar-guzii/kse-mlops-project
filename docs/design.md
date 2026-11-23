@@ -36,7 +36,7 @@ IoU measures overlap between the predicted and reference areas of one class. It 
 | Level | Metric and target | How it is checked |
 |---|---|---|
 | Decision / workflow | At least 9 of 10 predefined valid test images produce a complete package. The package opens in QGIS on the correct grid without manual format or georeferencing repair | A fixed test set includes PNG, JPEG, georeferenced GeoTIFF and three image sizes. This checks whether the export is usable; it does not measure cartographic accuracy |
-| Model | The first neural model exceeds the random-forest baseline in OEM-8 mIoU. Each later update must meet the promotion rule (Section 5.4) | Control sets for development; final holdouts are evaluated once |
+| Model | The first neural model exceeds the random forest in OEM-8 mIoU. Each later update must meet the promotion rule (Section 5.4) | Control sets for development; final holdouts are evaluated once |
 | System | Job acknowledgement p95 ≤ 1 s after upload; completion p95 ≤ 5 min for a 4096×4096 image at the assumed load. At most 1% of valid jobs fail for system reasons per week | Load test (Section 6.3) and monitoring (Section 6.6) |
 
 Here, p95 is a time limit met by at least 95% of the relevant measurements. Acknowledgement means that the service returns a job ID after upload. Completion means that the result is ready.
@@ -57,10 +57,10 @@ mIoU is the **optimization** metric: the score we try to improve. Export validit
 
 | Category | Requirement |
 |---|---|
-| Freshness | This requirement concerns new training data. Before training, the system compares the batch file checksums with the data already stored. If there are no new files, normal batch ingestion fails (Section 5.2). A separate assumption about frequency: at most one labelled batch a month, because an operator reviews each update |
+| Freshness | This requirement concerns new training data. Each run ingests the batch registered for the year of its data interval, or the batch it names; a run for a year with no registered batch, or for a batch without files, fails (Section 5.2). A separate assumption about frequency: at most one labelled batch a month, because an operator reviews each update |
 | Latency and throughput | This requirement concerns the speed of processing user uploads. The API returns a job ID with p95 ≤ 1 s after upload. For a 4096×4096 image, the result is ready with p95 ≤ 5 min at the assumed load (Section 6.3). Jobs run on 1–4 workers; queue wait is also measured separately |
 | Availability and fallback | The cloud service runs continuously. Job state is stored in PostgreSQL and files in object storage, so this data survives a host failure. A lease is the period during which a worker has the right to run a job. Once it expires, an interrupted job is retried, with up to 3 attempts in total. If the approved model cannot be loaded, jobs remain in the queue and the service does not produce a mask without a model. If the LLM provider fails, the service returns an error and keeps the task for a retry |
-| Reproducibility | This covers two requirements: repeating training and ingesting a batch again without duplicate data. Every training run records data version, code commit, configuration, preprocessing, taxonomy version, parent model and seeds. The target is to repeat the build of any registered model version with one command from a clean clone, using those data and settings. Ingesting the same batch again does not create duplicate dataset records. Bit-identical GPU weights are not required. For user images, uploading again creates a new job; files are deleted after 24 hours. This requirement does not promise to return a saved mask |
+| Reproducibility | This covers two requirements: repeating training and ingesting a batch again without duplicate data. Every training run records data version, code commit, configuration, preprocessing, taxonomy version, parent model and seeds. The target is to repeat the build of any registered model version with one command from a clean clone, using those data and settings. Ingesting the same batch again replaces its rows and creates no duplicates. Bit-identical GPU weights are not required. For user images, uploading again creates a new job; files are deleted after 24 hours. This requirement does not promise to return a saved mask |
 | Adaptability | This requirement concerns how model updates are tested. For a new batch, the operator trains a candidate model from the approved model (Section 5.3). A new architecture is also tested as a candidate first. Assumption: old OEM training tiles make up 50% of the training mix in the first experiments. This keeps either source from dominating. The operator chooses the final share based on results on the development controls |
 | Observability without ground truth | This requirement concerns monitoring user uploads. They have no reference masks, so there is nothing to compare the prediction with and IoU cannot be computed for them. The service monitors failures and latency. Each day, it checks input image statistics and predicted class shares (Section 6.6). These signals help detect changes but do not prove a change in accuracy by themselves. IoU is computed only for labelled batches, when the system receives images together with reference masks |
 | Cost and resource ceilings | The cloud service estimate at listed rates is about $302/month, or $338 in a training month (Section 6.7). For one job, the uploaded file is limited to 128 MiB and the decoded image to 64 megapixels. One worker with 1 vCPU and 4 GiB RAM runs the job. The job has a 15-minute deadline, which must not run past the upload's expiry. These limits bound disk space, decoding memory and work time |
@@ -125,6 +125,8 @@ We also considered NAIP images for Utah back to 2003 (with coarser resolution be
 
 The FLAIR sequence changes both year and region, so its scores measure transfer to later images of other places. They do not measure change at one place or what a model available in 2017 could have achieved: OEM and the ImageNet encoder were published later. The zero label delay above describes access to an existing image-and-mask pair, not the time from image acquisition or the time needed to create a mask. A Lab 4 exercise may withhold one batch's labels as a declared simulation.
 
+**Course sample.** The course runs the same pipeline at a smaller scale: 16 image–label pairs from each of the six domains, 192 unmodified GeoTIFFs (98 MB). For each domain, the patches present in both its `AERIAL_RGBI` and `AERIAL_LABEL-COSIA` archives at a pinned Hugging Face commit are sorted by tile ID and every k-th is kept, so every retrieval selects the same files. OEM is not ingested in the course yet. A batch is one acquisition year, which is one FLAIR-HUB domain; its masks arrive with its images, so the label delay is zero (item 3 above). The raw data has a single version identifier: the DVC hash of the tracked `data/raw` directory in the committed pointer file `data/raw.dvc`.
+
 **Label mapping.** Before training, we replace the numeric IDs of pixels in each original OEM mask with the service's internal IDs: 1–8 → 0–7 and 0 → 255 ([OEM class codes](https://raw.githubusercontent.com/bao18/open_earth_map/main/open_earth_map/utils.py)). For example, OEM ID `1` (bareland) becomes internal ID `0`; the class itself stays the same. The code `255` means `ignore`: these pixels are excluded from training and evaluation. In service outputs, `255` also marks invalid input pixels (Section 5.1).
 
 FLAIR-HUB uses its own IDs 0–18, which differ from FLAIR-1/2 ([label configuration](https://github.com/IGNF/FLAIR-HUB/blob/main/configs/train/config_supervision.yaml)). Crosswalk version 1 replaces these with the corresponding internal OEM-8 IDs only for unambiguous classes:
@@ -141,37 +143,37 @@ FLAIR-HUB uses its own IDs 0–18, which differ from FLAIR-1/2 ([label configura
 
 FLAIR masks therefore provide training labels for six classes: 0, 1, 4, 5, 6 and 7. The FLAIR impervious class combines roads, parking and construction, so road (3) and developed space (2) are learned and checked only on OEM. The model always keeps eight outputs.
 
-**Dates.** The fields `acquisition_start`, `acquisition_end`, `date_precision`, `label_reference_period`, `source_published_at` and `ingested_at` may be null. A missing date stays null and processing continues. If only a year is known, we do not use 1 January in place of the unknown exact date. Inference needs no date.
+**Dates.** The fields `acquisition_start`, `acquisition_end`, `date_precision`, `label_reference_period`, `source_published_at` and `ingested_at` may be null. A missing date stays null and processing continues. If only a year is known, we do not use 1 January in place of the unknown exact date. Inference needs no date. In the course, the warehouse tables store only the acquisition year of each batch.
 
-**Manifest and freshness, by example.** The pipeline needs to know which files make up a training batch and whether any are new. The manifest provides this record: it is a JSON list of the files, with each file's SHA-256 checksum, size, source ID and any known acquisition dates. Its digest is a checksum that depends only on the manifest's content, so it identifies the same batch when it is submitted again.
+**Batch selection and rerun, by example.** Each pipeline run processes exactly one batch: the one named by the run's `batch_id` parameter, or otherwise the batch registered for the year of the run's data interval start. The current time never chooses the batch.
 
-The watermark points to the last successfully added batch and its dataset version. The next run compares its input with the data already accepted at that point. Dataset versions preserve the history; the watermark identifies where processing should continue.
+1. The operator runs the pipeline for 2019. The run selects D065-2019, validates it, writes one tile row and one feature row per image–label pair and passes the quality gate.
+2. The operator runs 2019 again. The run deletes D065-2019's rows and writes them again, so each table holds the same number of rows for that batch as before, and other batches' rows are unchanged. No flag or manual cleanup is needed.
+3. A run for a year with no registered batch, or for a batch without files, fails before loading anything.
 
-1. The operator uploads D065-2019 to the pipeline. The pipeline validates the batch and saves dataset version 3; only after that succeeds does it set the watermark to 3. Here, 3 is the version ID, not a file count.
-2. The next scheduled run reads the same folder. Every file checksum in the manifest is already present in version 3, so this ordinary run fails before training with a stale-input alert. The watermark stays at 3.
-3. The operator sets `replay=true` to rerun the accepted batch D065-2019. The pipeline reuses the saved version 3 without adding duplicate data records.
-
-If validation or storage of a new batch fails, the watermark stays at the last successful version. Updating it only after a successful save prevents the pipeline from treating a failed batch as accepted.
+A batch that fails structural validation is not loaded: the run stops before `load`, and the rows of an earlier successful run of that batch stay. A batch that fails the quality gate has its rows removed by `quality_check`. Between `load` and the end of `quality_check` the rows are visible to other readers of the database, so a reader uses a batch only after its run has succeeded. The Git history of `data/raw.dvc` is the history of the raw data.
 
 **Storage and versioning:**
 
 | Artifact | Format | Local | Cloud | Versioned by |
 |---|---|---|---|---|
-| Raw archives, images and masks | Original ZIP, TIFF, PNG | Floci (S3 API) | Amazon S3 | DVC content hashes |
-| Clean tiles and remapped masks | GeoTIFF or PNG; uint8 masks | Object storage | S3 | DVC; one `.dvc` pointer per dataset version |
-| Manifests, splits, taxonomy, crosswalk | JSON | Git | Git | Git commit |
-| Jobs, users, batches, watermark, monitoring statistics | PostgreSQL tables | PostgreSQL 16 | RDS | Migrations in Git |
+| Raw archives, images and masks | Original ZIP, TIFF, PNG; the course keeps only the sampled TIFFs | pgsty/silo (S3 API) | Amazon S3 | DVC content hashes; one `.dvc` pointer |
+| Clean tiles and remapped masks | GeoTIFF or PNG; uint8 masks | Not stored in the course: labels are remapped in memory | S3 | DVC; one `.dvc` pointer per dataset version |
+| Tile rows and tile features | PostgreSQL tables `dwh.tiles` and `features.tile_features` | PostgreSQL 16 | RDS | SQL schema file in Git; `feature_version` column |
+| Splits and taxonomy | JSON | Git | Git | Git commit |
+| Crosswalk | Constants in the pipeline code | Git | Git | Git commit |
+| Jobs, users, monitoring statistics | PostgreSQL tables | PostgreSQL 16 | RDS | Migrations in Git |
 | Runs, metrics, model versions, alias | MLflow: metadata in PostgreSQL, files in object storage | MLflow | MLflow on EC2 with RDS and S3 | MLflow model versions |
 | Uploads and results | Original file; GeoTIFF, PNG, JSON | Temporary bucket | Temporary S3 bucket, no versioning | Not versioned; expire after 24 h (Section 6.5) |
 | Retrieval corpus | Saved document copies; chunks with pgvector embeddings | Object storage, PostgreSQL | S3, RDS | Copy SHA-256, `doc_version`, index version |
 
 Images and masks stay in raster formats. Converting them to CSV or Parquet would add an unnecessary step.
 
-**Git, DVC and Git LFS.** Git stores code, configuration, documentation, `uv.lock`, JSON manifests and DVC pointers.
+**Git, DVC and Git LFS.** Git stores code, configuration, documentation, `uv.lock`, the SQL schema file and DVC pointers.
 
 DVC stores rasters and checkpoints under content hashes in object storage; `dvc pull` restores the data version a commit names.
 
-Git LFS only stores and fetches large files. DVC also tracks pipeline stages and rebuilds stale derived data, so Git LFS is not used. Manifests use JSON because it is small, readable and diffable.
+Git LFS only stores and fetches large files. DVC also gives a whole directory one content hash, which serves as the data version, and verifies pulled files against it, so Git LFS is not used. DVC pipeline stages are not used: Airflow runs the pipeline, and its outputs are PostgreSQL rows rather than files.
 
 **Retrieval corpus:**
 
@@ -187,15 +189,17 @@ For each saved copy of a document, we record its source URL, access date, SHA-25
 
 ## 5.3 Techniques
 
-**Baseline: random forest on RGB texture features.** Each pixel is classified from intensity, edge and texture features, producing an eight-class mask on CPU without pretrained weights.
+**Baseline: majority class.** The rule assigns every pixel the class with the most labelled pixels in the training batches. It has no free choice that could be tuned on a control, so it is the floor every trained model must beat. In the course sample the class is agriculture land.
+
+**First trained model: random forest on RGB texture features.** Each pixel is classified from intensity, edge and texture features, producing an eight-class mask on CPU without pretrained weights.
 
 - [`multiscale_basic_features`](https://scikit-image.org/docs/stable/api/skimage.feature.html#skimage.feature.multiscale_basic_features) at scales 1, 2, 4 and 8 px.
 - scikit-learn [`RandomForestClassifier`](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html): 100 trees, depth 12, fixed seed.
-- At most 10,000 valid pixels per class from OEM training regions; remove ID 255.
+- At most 10,000 valid pixels per class, drawn with the run's seed from the training batches; ID 255 is never drawn. The cap keeps the forest from learning mostly class frequencies.
 
 Fit directly, without [`fit_segmenter`](https://scikit-image.org/docs/stable/api/skimage.future.html#skimage.future.fit_segmenter): label 0 (bareland) is a valid class.
 
-The baseline could remain in production if its per-class IoU and users' correction effort were acceptable. It will likely confuse context-dependent classes: road and developed space, or agriculture and rangeland.
+The forest is deterministic on a CPU: the same commit, data version and seed give the same scores, which makes it the reference for reproduction (Section 5.4). It could remain in production if its per-class IoU and users' correction effort were acceptable. It will likely confuse context-dependent classes: road and developed space, or agriculture and rangeland.
 
 **Candidate: U-Net with an EfficientNet-B4 encoder** ([segmentation_models_pytorch](https://github.com/qubvel-org/segmentation_models.pytorch) 0.5.0):
 
@@ -206,22 +210,27 @@ smp.Unet(encoder_name="tu-tf_efficientnet_b4.in1k", encoder_weights="imagenet",
 
 For the first training run, we load the encoder weights from the [timm ImageNet checkpoint](https://huggingface.co/timm/tf_efficientnet_b4.in1k) (Apache-2.0).
 
-Preprocessing divides the pixel values in each RGB channel by 255. It then normalizes each channel using mean (0.485, 0.456, 0.406) and standard deviation (0.229, 0.224, 0.225), in red, green and blue order. Training and serving use 512×512 tiles with the same overlap and padding.
+Preprocessing divides the pixel values in each RGB channel by 255. It then normalizes each channel using mean (0.485, 0.456, 0.406) and standard deviation (0.229, 0.224, 0.225), in red, green and blue order. Training and serving use 512×512 tiles with the same overlap and padding. Course settings: full 512×512 tiles, batch size 8, random flips and quarter turns applied to image and mask together, cross-entropy that ignores 255, AdamW, 40 epochs keeping the last weights, and mixed precision on CUDA only. Each run records the Hugging Face revision of the encoder weights it downloaded.
 
 On the [OEM benchmark, Tables 3 and 5](https://arxiv.org/html/2210.10732), this architecture reached 68.20 mIoU with 20.3 M parameters. It also led the comparison that used 10% of labels. These published results support the architecture choice. We still need to measure our model's accuracy and CPU speed.
 
-ImageNet weights initialize only the first OEM training run. For each update, we resume training from the full approved checkpoint, including the decoder and head. **OEM replay** means mixing old OEM training tiles with the new batch. This helps retain the learned classes. This training method is separate from the `replay=true` flag in Section 5.2.
+ImageNet weights initialize only the first OEM training run. For each update, we resume training from the full approved checkpoint, including the decoder and head. **OEM replay** means mixing old OEM training tiles with the new batch. This helps retain the learned classes.
 
-**Features and their serving-time sources:**
+**Course training.** OEM is not ingested in the course (Section 5.2). Each model is trained once, by `python -m landcover.train`, on the four pooled 2017–2020 FLAIR-HUB batches, with the six classes their labels contain; road and developed space are neither trained nor scored. The U-Net keeps eight outputs, and the two without FLAIR labels receive no positive target. The sequential updates from the approved checkpoint and OEM replay described above are product behaviour that the course does not run.
 
-| Input | Training source | Serving source |
-|---|---|---|
-| RGB pixels, 8-bit | OEM and FLAIR adapters; FLAIR's NIR is dropped | Uploaded file, same channel order |
-| Normalization and tiling | Configuration stored with the checkpoint | Same configuration, loaded with the model version |
-| Random-forest features | Computed from training tiles | Computed from the upload, same configuration |
-| Masks | OEM and FLAIR labels after remapping | None |
-| CRS and affine | Not a model input | Copied from a valid uploaded GeoTIFF to the output |
-| Augmentation | Random flips and rotations of image and mask together | None |
+**Model inputs and features, with their serving-time sources.** Every model is stored in MLflow as one wrapper whose `predict` takes an RGB array and returns a class mask; the forest's feature computation and the U-Net's scaling, normalisation and padding run inside the wrapper, and the `landcover` package is stored with the model version.
+
+| Value | Training source | Serving source | Read by |
+|---|---|---|---|
+| RGB pixels, 8-bit | Raw tile, first three bands; FLAIR's NIR is dropped | The uploaded image, same channel order | Forest, U-Net |
+| Pixel texture features | Computed from the tile by the packaged code | Computed from the upload by the same code, loaded with the model version | Forest |
+| Scaling, normalisation, padding to a multiple of 32 | Packaged code and constants | Same code, loaded with the model version | U-Net |
+| Labels | Raw label after crosswalk v1 | None: uploads have no masks | Training targets and scoring only |
+| `channel_mean` | `features.tile_features`, from the image | Computed from the upload | Input-drift monitoring (Lab 4); no model |
+| `class_share`, `ignored_share` | `features.tile_features`, from the labels | None: a label statistic that exists only for labelled batches; its serving counterpart is the predicted class share of the output mask | Quality gate and monitoring reference; no model |
+| `batch_id`, `tile_id`, `feature_version` | `features.tile_features` keys and version | None: identifiers, not values; an upload is identified by its job ID | No model |
+
+No feature is read from the warehouse at training or serving time: training reads the raw files, and the warehouse tables serve the quality gate and monitoring.
 
 Serving accepts only 8-bit RGB. A future adapter will convert known 16-bit and other containers to 8-bit RGB. An image with unknown band meanings is rejected unless the user identifies its red, green and blue bands.
 
@@ -244,12 +253,21 @@ A random split could place neighbouring tiles from the same scene in both traini
 
    A road prediction on a FLAIR tree pixel is a false negative for tree and a false positive for road. Each report lists the scored class IDs, the support (reference pixels per class), the ignored fraction and the number of classes in the mean. If a required class has no reference pixels, the evaluation is incomplete. Do not take a decision from an incomplete evaluation. Report OEM-8 mIoU and six-class regional mIoU separately. Never average them together.
 4. **First neural approval.** Evaluate the U-Net and random forest on the same OEM development control. The U-Net is eligible for approval when its OEM-8 mIoU exceeds the random forest's and it passes the export and resource checks. Include its regional score in the report; that score is not an approval condition.
-5. **Update approval.** Compare each candidate with the approved model, not the baseline. Use the same frozen development manifests for both models. Under the **selected policy** it is eligible when:
+5. **Update approval.** Compare each candidate with the approved model, not the random forest. Use the same frozen development manifests for both models. Under the **selected policy** it is eligible when:
    1. OEM-8 mIoU is at least the approved model's.
    2. Regional mIoU is higher than the approved model's.
    3. No OEM class loses more than **2 percentage points** of IoU; exactly 2 is allowed, and the difference is absolute IoU, not relative.
    4. Class coverage, export validity and resource checks pass.
 6. **Final evaluation.** After the last update, evaluate the approved model once on the OEM final regions and D073-2022. Never use final holdouts for tuning, replay selection or promotion.
+
+**Course experiment (Lab 2).** The course runs a reduced version of these steps on FLAIR-HUB alone.
+
+- **Split.** Whole batches: D080-2017, D033-2018, D065-2019 and D045-2020 are pooled for training; D017-2021 is the development control; D073-2022 stays the final holdout and is opened by no training or scoring code. A batch is one département in one year, so every control tile is from a later year and a different region than every training tile, and no neighbouring patch of one flight can fall on both sides.
+- **No inner validation.** The U-Net trains a fixed number of epochs and keeps the last weights, so nothing is selected on held-out training tiles. Its per-epoch development score is recorded as history and selects nothing. The development control is the only data the operator may use to change settings.
+- **Metric.** The six-class mIoU of step 3 over classes 0, 1, 4, 5, 6 and 7 on the development control, reported with pixel accuracy, the ignored share and the labelled pixels of each class. The control has 16 tiles, and building rests on about 15,000 pixels in 2 of them, so small differences between models are not evidence. OEM-8 mIoU is not computed in the course.
+- **Champion.** The forest and the U-Net are registered, and `champion` points at the one with the higher development mIoU. The majority-class rule is the floor and is not registered.
+- **Approval rules not exercised.** Steps 4 and 5 compare OEM-8 scores and per-class OEM losses, which need OEM, and the course has no sequential update; these rules stay the product description. Step 6 is not run in Lab 2.
+- **Reproduction.** `make reproduce VERSION=<n>` retrains a registered version from its commit, data version and logged parameters, including the encoder revision for U-Net. The forest and rule use a 0.01 development mIoU tolerance. U-Net uses CUDA with `GPU=L4` available for a Colab run. Section 7.2 records the measurements and tolerance.
 
 ## 5.5 Human in the loop
 
@@ -268,13 +286,50 @@ Lifecycle: training run → registered candidate → `champion` alias → monito
 
 *Figure 1. System context.*
 
-![Seven-layer data flow with training and upload lanes, the version point, the quality gate, the manual Colab import, the registry alias and the retraining loop](diagrams/data-flow.svg)
+![Seven-layer data flow with upload and training lanes: FLAIR-HUB batches fetched by make data and versioned with DVC in pgsty/silo as the version point; the Airflow tasks extract, validate, transform, load, build_features and quality_check writing dwh.tiles and features.tile_features; the quality gate; make train and make train-remote writing a result directory, the log step into the MLflow server with its PostgreSQL database and silo bucket, the registered model landcover-segmenter with the champion alias, and the retraining loop](diagrams/data-flow.svg)
 
-*Figure 2. Data flow on the seven layers.*
+*Figure 2. Data flow on the seven layers. The training lane of layers 1–3 and layers 4 and 5 show the components built in Lab 2; training reads the raw files at the version point, not the feature table.*
 
 ![Deployment draft: local components with their managed AWS equivalents, the host-native LLM and Colab Pro](diagrams/deployment.svg)
 
 *Figure 3. Local deployment, first draft. AWS names show managed equivalents for reference. Section 6.2 describes the selected cloud deployment.*
+
+### Lab 2 data layers
+
+```mermaid
+flowchart LR
+    Source["FLAIR-HUB pinned sample"] --> Raw["data/raw · GeoTIFFs"]
+    Store["DVC remote · pgsty/silo"] <-->|"directory checksum"| Raw
+    Raw -->|"validate and transform"| Clean["PostgreSQL · dwh.tiles"]
+    Clean -->|"build_features"| Features["features.tile_features · feature_version"]
+    Features --> Gate["quality_check and monitoring reference"]
+    Raw --> Train["Train from RGB tiles"]
+    Upload["User RGB upload"] --> Serve["Compute serving inputs from the image"]
+```
+
+### Lab 2 Airflow DAG
+
+```mermaid
+flowchart LR
+    Interval["data_interval_start or explicit batch_id"] --> Extract[extract]
+    Extract --> Validate[validate] --> Transform[transform] --> Load[load]
+    Load --> Build[build_features] --> Gate[quality_check]
+    Load -->|"replace batch rows"| Tiles["PostgreSQL · dwh.tiles"]
+    Build --> Features["PostgreSQL · features.tile_features"]
+    Features --> Gate
+    Gate -->|"reject and remove batch rows"| Rejected["Failed run"]
+```
+
+### Lab 2 tracking and registry
+
+```mermaid
+flowchart LR
+    Run["Training result · model and run.json"] -->|"parameters, metrics, data_version, git_commit"| Tracking["MLflow tracking server"]
+    Tracking --> Metadata["PostgreSQL · mlflow"]
+    Tracking --> Artifacts["pgsty/silo · landcover-mlflow"]
+    Tracking -->|"register and probe"| Registry["landcover-segmenter · version and lineage tags"]
+    Registry -->|"champion"| Model["Load by alias · local probe or serving worker"]
+```
 
 ## 6.2 Infra
 
@@ -282,31 +337,46 @@ Lifecycle: training run → registered candidate → `champion` alias → monito
 |---|---|---|---|---|
 | Segmentation service: API, web UI, workers | FastAPI and worker containers in Minikube | ECS on EC2: core host plus burst group | EKS | EKS adds a $73/month control plane without more availability |
 | GIS assistant | Container in Minikube | ECS on EC2, core host | EKS | Same host as the API |
-| Object storage | Floci (S3 API) | Amazon S3 | Amazon S3 | Cheaper per GB than a disk, with managed durability |
-| Data versioning | DVC with S3 remote | DVC with S3 remote | S3 remote | Same tool in both places |
+| Object storage | pgsty/silo `RELEASE.2026-09-16T00-00-00Z` (S3 API) | Amazon S3 | Amazon S3 | Cheaper per GB than a disk, with managed durability |
+| Data versioning | DVC 3.67.1 with dvc-s3 3.3.0; S3 remote on pgsty/silo | DVC with S3 remote | S3 remote | Same tool in both places |
 | PostgreSQL + pgvector | PostgreSQL 16 with pgvector | RDS for PostgreSQL db.t4g.small, Single-AZ, with pgvector | RDS for PostgreSQL; OpenSearch Serverless for vectors | Managed backups and patching for $23.60/month more than self-hosting |
 | Airflow (orchestrator) | Airflow 3.3.1, LocalExecutor | Self-hosted on the core host | Amazon MWAA | A few scheduled DAGs do not justify $358/month |
-| MLflow (tracking and registry) | MLflow 3.16.1 with authentication | Self-hosted on the core host | SageMaker AI serverless MLflow App | Keeps the course's pinned version and alias permissions |
+| MLflow (tracking and registry) | MLflow 3.16.1 in Compose: runs in the PostgreSQL database `mlflow`, files in the silo bucket `landcover-mlflow`, served on `127.0.0.1:5001`; no authentication until Lab 4 | Self-hosted on the core host, with authentication | SageMaker AI serverless MLflow App | Keeps the course's pinned version and alias permissions |
 | Monitoring | Prometheus, Grafana, Alertmanager, Evidently job | Same, self-hosted; CloudWatch alarms and SNS for host and health-check alerts | CloudWatch; SageMaker Model Monitor | Model Monitor is closed to new customers and is designed for tabular data; a monitor cannot report a failure of the host it runs on |
 | LLM and embeddings | Host-native llama-server (Metal): Gemma 4 12B QAT Q4_0; Qwen3-Embedding-0.6B | Bedrock: Claude Sonnet 5.5; Titan Text Embeddings V2 | Amazon Bedrock | An always-on GPU costs $587.50/month before disks; the API costs $124.82 at the assumed load |
 | Identity | Pre-provisioned per-user tokens with roles | Amazon Cognito | Amazon Cognito | A self-hosted identity server adds a database and patching |
 | Minikube and container registry | Minikube with its registry | ECS on EC2; Amazon ECR | EKS; ECR | As above |
 | Training resource | Colab Pro (owned); Mac for small runs | EC2 g6.xlarge on demand, 40 h budget | SageMaker Training | Pay only for training hours |
-| Feature store | Not needed | Not needed | SageMaker Feature Store | No entity features to look up online; tensors come from the image with versioned preprocessing |
+| Feature store | Feature table `features.tile_features` in PostgreSQL; Feast is not used | Same table in RDS | SageMaker Feature Store | No entity features to look up online; tensors come from the image with versioned preprocessing |
 
-**Local S3 development.** [Floci](https://github.com/floci-io/floci/blob/2.3.0/docs/services/s3.md) provides the S3 API locally for datasets, model artifacts, corpus files and temporary uploads and results. This lets the author develop and test S3 requests before using AWS. The application will use the same standard S3 operations in both environments, with a local endpoint, region and test credentials configured for Floci. In AWS, it will use the S3 endpoint and the task's IAM role. The SDK supports [environment-specific endpoint configuration](https://docs.aws.amazon.com/sdkref/latest/guide/feature-ss-endpoints.html); DVC remote and MLflow artifact settings will be checked separately in Lab 2.
+**Equivalents on the other clouds.** AWS is the selected cloud. The lab's reference table names the managed service for the same job on each cloud:
 
-Floci will use [persistent disk storage](https://github.com/floci-io/floci/blob/2.3.0/docs/configuration/storage.md), mounted on a persistent volume, so completed uploads survive restarts. Its default memory mode would lose the data. Datasets and model artifacts will be stored separately from temporary uploads and results, which retain the expiry rules in Section 6.5.
+| Component | AWS | GCP | Azure |
+|---|---|---|---|
+| Object storage | Amazon S3 | Cloud Storage | Blob Storage |
+| Data versioning remote | DVC S3 remote | DVC GCS remote | DVC Azure Blob remote |
+| PostgreSQL warehouse | Amazon RDS | Cloud SQL | Azure Database for PostgreSQL |
+| Orchestrator | Amazon MWAA | Cloud Composer | Azure Data Factory |
+| Experiment tracking and model registry | SageMaker with MLflow | Vertex AI Experiments and Model Registry | Azure ML with MLflow |
+| Feature store | SageMaker Feature Store | Vertex AI Feature Store | Azure ML managed feature store |
+| Container registry | Amazon ECR | Artifact Registry | Azure Container Registry |
+| Kubernetes cluster | Amazon EKS | GKE | AKS |
+| Model and data monitoring | SageMaker Model Monitor | Vertex AI Model Monitoring | Azure ML model monitoring |
+| Metrics store and dashboards | Amazon CloudWatch | Cloud Monitoring | Azure Monitor |
+| Vector store | OpenSearch Serverless vector search | Vertex AI Vector Search | Azure AI Search |
+| LLM inference | Amazon Bedrock | Vertex AI generative AI | Azure OpenAI |
 
-This selection covers S3. Passing local API checks will not establish AWS IAM permissions, networking, durability or scaling; these need checks in AWS before migration. The storage checks planned for Lab 2 are listed in Section 7.4.
+**Local S3 development.** [pgsty/silo](https://hub.docker.com/r/pgsty/silo), the course's reference S3-compatible store, provides the S3 API locally; in Lab 2 it holds the DVC remote `s3://landcover-dvc` on a named volume. The application uses the same standard S3 operations in both environments: a local endpoint and credentials from `.env` locally, the S3 endpoint and the task's IAM role in AWS. Passing local checks does not establish AWS IAM permissions, networking, durability or scaling; these need checks in AWS before migration. The storage checks run in Lab 2 are listed in Section 7.4.
+
+**Lab 2 stack.** Lab 2 runs PostgreSQL, Airflow, pgsty/silo and the MLflow server with Docker Compose on the Mac, with the pipeline code mounted from the repository. MLflow keeps its runs in its own database on the same PostgreSQL server and proxies model files to and from the bucket `landcover-mlflow`, so a client needs only the tracking address. Host port 5001 is used because macOS holds port 5000. The components move to Minikube in Lab 4.
 
 The segmentation service is ready only after it loads the `champion` model and its preprocessing configuration. Without the model, the readiness probe reports that the service is not ready. The assistant is ready only when its LLM endpoint and corpus index respond.
 
-**Training exchange (course).** The operator starts neural training runs in Colab Pro. Colab cannot reach local MLflow. Each run saves `model.pt`, `checkpoint.pt`, `metrics.json` and `run.json` to Google Drive.
+**Training exchange (course).** `make train-remote` requests a Colab L4 by default and sends the launcher `scripts/remote_train.py` with the public repository URL, commit and training arguments. The runtime installs the locked dependencies, fetches the pinned sample, checks it against `data/raw.dvc` and confirms the allocated GPU before training. The host verifies the returned model and record, releases the Colab session and logs the result to local MLflow.
 
-The operator downloads the results folder from Google Drive to the local Mac and runs the import command. The command verifies hashes, rebuilds the model on CPU from the recorded code and configuration, logs the run and registers a version in local MLflow.
+Logging is the only way a result enters MLflow, for local and remote runs alike. It verifies the SHA-256 of the model file, loads the model through the wrapper stored with the run, scores it again on the development control on the Mac and refuses a result whose score differs from the recorded one by more than 0.005. The U-Net's weights are loaded as a state dictionary with `weights_only=True`, so no pickle from a remote machine is executed. Registration is a separate operator command.
 
-MLflow stores runs, versions, approvals and traces. W&B only displays metric charts while training runs in Colab.
+MLflow stores runs, the per-epoch training history, versions and the `champion` alias.
 
 **LLM choices.** [Gemma 4 12B QAT Q4_0](https://huggingface.co/google/gemma-4-12B-it-qat-q4_0-gguf) runs through [llama.cpp](https://github.com/ggml-org/llama.cpp) with Metal on the Mac host, because Docker on this Mac has no GPU access.
 
@@ -345,8 +415,8 @@ Replay twice the peak arrival rate for an hour. Record p95 completion time and q
 ## 6.4 Security
 
 - **Authentication.** Cloud users sign in with Cognito; the API checks the token's issuer, audience, signature and expiry. Locally, pre-provisioned per-user tokens map to the `gis_user` and `operator` roles.
-- **Authorization.** A GIS user creates jobs and reads only their own jobs and results. Only the operator ingests batches, starts training and changes the registry: MLflow runs with authentication. Changing the `champion` reference requires operator credentials; workers have read-only access to the registry.
-- **Secrets.** An ignored `.env` file locally. In the cloud, secrets are stored as SSM Parameter Store SecureString with KMS; tasks read them through their own IAM roles. Secrets never enter Git, images or logs.
+- **Authorization.** A GIS user creates jobs and reads only their own jobs and results. Only the operator ingests batches, starts training and changes the registry. In the course, MLflow has no authentication: its only client is the operator on the same machine, and its port binds to `127.0.0.1`. Lab 4 adds authentication together with the first read-only client, the serving worker; from then on, changing the `champion` reference requires operator credentials and workers have read-only access to the registry. The remote training launcher sends no credentials: the runtime clones the public repository and fetches the data from Hugging Face.
+- **Secrets.** Locally, an ignored `.env` file holds the PostgreSQL and object-store credentials; `.env.example` lists only the variable names, and the committed DVC remote configuration names only the bucket and endpoint. Locally published ports bind to `127.0.0.1`. In the cloud, secrets are stored as SSM Parameter Store SecureString with KMS; tasks read them through their own IAM roles. Secrets never enter Git, images or logs.
 - **Network.** Only the HTTPS proxy is public; PostgreSQL, Airflow, MLflow and Grafana are private and reached through SSM.
 - **Input checks.** Before decoding the whole image, the API enforces the size bounds (Section 4) and the 8-bit RGB rule (Section 5.3); it generates object keys itself and rejects archives.
 - **Assistant.** User requests and retrieved documents are data, not instructions. Every tool call is validated in code and runs with the caller's permissions; no tool can promote a model or change infrastructure.
@@ -357,7 +427,7 @@ Uploads may show private property, people and vehicles. A georeferenced GeoTIFF 
 
 - **Uploads and results** are kept until `expires_at = accepted_at + 24 h`, which is 24 hours after the upload is accepted. At `expires_at`, access is denied. Signed URLs expire no later than `expires_at`. A queued job does not start, and a running job is cancelled. Any late output is discarded without extending the expiry. Files must be deleted at `expires_at`, and deletion is monitored (Section 6.6). The temporary bucket has no object versioning, so no old copies remain.
 - **Logs and metrics** are kept for 30 days with user and job IDs, sizes, timings and errors, but no image bytes, file names, coordinates or secrets.
-- **Training data** comes only from the public datasets in Section 5.2 and is kept for the project's life with attribution. OEM labels default to CC BY-NC-SA 4.0 and FLAIR-HUB uses Etalab Open Licence 2.0; the project redistributes neither.
+- **Training data** comes only from the public datasets in Section 5.2 and is kept for the project's life with attribution. The course sample is fetched from the source and kept on the author's machine and in the local object store. OEM labels default to CC BY-NC-SA 4.0 and FLAIR-HUB uses Etalab Open Licence 2.0; the project redistributes neither.
 - **No user feedback** enters training in the first version: user images and QGIS corrections are never training data.
 
 ## 6.6 Monitoring and alarms
@@ -376,7 +446,7 @@ With fewer than 50 images or an incomplete reference, the report says "insuffici
 | Job failures | Over the last 1 h: ≥ 3 system failures, or > 1% of valid jobs per week | 1% is the Section 3 target; 3 failures in an hour indicate a fault rather than an isolated failure | The operator reads job errors and worker logs |
 | Latency | Over the last 15 min: completion p95 > 5 min, or the oldest queued job waits > 10 min while 4 workers run | Completion exceeds the p95 target; a long queue with all 4 workers running indicates that the capacity limit is too low | The operator checks worker health and limits |
 | Service health | The external HTTPS check, run once per minute, fails 3 times in a row, or a worker cannot load `champion` | Host or model loss stops all jobs | The operator replaces the host or rolls back the alias |
-| Training batch gate | Every run: any invalid file (format, image–mask grid mismatch, unknown class ID), or no new checksum | The check detects invalid and repeated batches. The watermark remains unchanged, so the last committed dataset version stays the same | The run fails; the operator fixes or replaces the batch |
+| Training batch gate | Every run: an empty batch or any invalid file (unreadable, not 8-bit with at least three bands, unpaired, image–mask grid mismatch, unknown class ID) before loading; after loading, an ignored-pixel share above 0.90 | Structural checks stop broken files before they reach the warehouse; the ignored share stops a batch whose labels carry almost no trainable class | The run fails and the refused batch leaves no rows; the operator fixes or replaces the batch |
 | Input drift | Daily: Population Stability Index (PSI) > 0.25 on per-image channel means or image size | Assumption: 0.25 is the conventional large-shift level. This threshold is checked against the PSI between the two 7-day halves of the input reference | The operator reviews sample overlays and may schedule a labelled batch |
 | Predicted class shares | Daily: any class share of valid pixels changes by > 10 percentage points | The model's predictions can change while input statistics look stable | The operator reviews sample overlays and may schedule a labelled batch |
 | Expiry cleanup | Hourly: any upload or result remains after `expires_at` + 1 h | The 24-hour privacy guarantee requires deletion at `expires_at`. The extra 1 h is only the alert threshold and does not extend the storage period | The operator runs the cleanup and checks the job |
@@ -428,8 +498,8 @@ Public data providers do not guarantee that their data stays up to date or remai
 
 | Boundary | Payload and format | Timing | Responsibility and failure behaviour |
 |---|---|---|---|
-| OEM authors → training-data ingestion pipeline | Zenodo release: images, masks, metadata; xBD images from xview2.org | Once, for the initial batch | We record the release ID and checksums, remap labels, and reject the whole batch if grids do not match or IDs are unknown |
-| IGN (FLAIR-HUB) → training-data ingestion pipeline | Each batch contains one domain's `AERIAL_RGBI` and `AERIAL_LABEL-COSIA` ZIPs at a pinned Hugging Face revision | When the operator starts an update | We apply the same checks and the freshness rule (Section 5.2). If an archive is missing, the run fails and the watermark does not change |
+| OEM authors → training-data ingestion pipeline | Zenodo release: images, masks, metadata; xBD images from xview2.org | Once, for the initial batch; not ingested in the course yet | We record the release ID and checksums, remap labels, and reject the whole batch if grids do not match or IDs are unknown |
+| IGN (FLAIR-HUB) → training-data ingestion pipeline | Each batch is one domain's `AERIAL_RGBI` and `AERIAL_LABEL-COSIA` files at a pinned Hugging Face commit; the course fetches 16 pairs per domain from the ZIPs (Section 5.2) | When the operator starts an update | Retrieval fails unless the fetched files hash to the DVC identifier in `data/raw.dvc`. The pipeline applies the structural checks and the quality gate (Section 6.6); a refused batch leaves no rows |
 | USGS / UGRC (NAIP) → monitoring | 4-band GeoTIFF tiles; the adapter keeps RGB | Optional, separately for each imagery vintage (Section 5.2) | We record tile IDs and checksums; the tiles are used only in drift reports |
 | Documentation authors → corpus | Pages and PDFs listed in Section 5.2 | We save copies when building the corpus | Each copy has a SHA-256 checksum. A changed page gets a new `doc_version`; the saved version is not edited |
 | GIS user → API | One image per request, in the Section 4 formats and bounds | Any time | We return a job ID, or a validation error that explains the problem |
@@ -454,7 +524,7 @@ The result's metadata records taxonomy v1 and model version 4. In QGIS, the lege
 | The core host or the RDS availability zone fails | Persist job state and use leases, which give a worker temporary ownership of a job (Section 4). Use the external health check (Section 6.6) |
 | The agent uses more tokens than estimated | Limit turns and context per task, and record tokens per run in Lab 3. Claude Haiku 5.5 is the cheaper candidate if it passes the evaluation |
 | The assistant follows instructions embedded in a document | Validate every tool argument in code (Section 6.4) |
-| A Colab session ends during training | Write `checkpoint.pt` to Drive every epoch and resume the run from it |
+| A Colab session ends during training | Start the run again: a course run takes minutes, the session is stopped on failure, and nothing is logged from an unfinished run. `make train MODEL=unet` on the Mac is the fallback |
 
 ## 7.1 Alternatives
 
@@ -466,14 +536,24 @@ The result's metadata records taxonomy v1 and model version 4. In QGIS, the lege
 | Chesapeake LULC with NAIP as the update source | Same places in three periods | Semi-automated labels revised in later editions; scripted access to the 2024 edition unverified | Alternative if same-place history matters more ([USGS](https://www.usgs.gov/data/chesapeake-bay-land-useland-cover-lulc-database-2024-edition)) |
 | FT-UNetFormer or Satlas as the first candidate | Higher published score; aerial pretraining | Section 5.3 | Revisit after the first implementation |
 | Richer taxonomy (e.g. FLAIR's coniferous and deciduous) or open-vocabulary segmentation | More classes; new concepts without a new head | A new taxonomy changes the head, legend, crosswalk and controls; a text prompt is not a validated class | Keep OEM-8; add classes when a concrete GIS need appears |
-| W&B instead of MLflow | Provider-hosted dashboards that update during training | An account and a [5 GB free storage limit](https://coreweave.com/forge-pricing); Lab 2 names MLflow | Optional graphs of metrics during training only |
+| W&B instead of MLflow | Provider-hosted dashboards that update during training | An account and a [5 GB free storage limit](https://coreweave.com/forge-pricing); Lab 2 names MLflow | Not used: MLflow records the per-epoch history |
 | MWAA and a legacy managed MLflow server | No Airflow or MLflow operations | About $797/month together | Self-hosted (Section 6.2) |
 | High availability: second host, RDS Multi-AZ, load balancer | Survives one host or zone failure | About +$190/month and failover tests | Not selected; continuous single-host service |
 | Learning from GIS users' corrections | Real labels for new regions | Needs consent and image licences; an "OK" click confirms the model's own errors; needs a review interface | Not in the first version (Section 6.5) |
 
-## 7.2 Placeholder
+## 7.2 Lab 2 model results
 
-Lab 2 fills this section with the baseline and update-candidate experiment results.
+MLflow recorded the following results on the 16 tiles of development batch D017-2021, with 9.73% of pixels ignored. The six class columns show IoU and labelled pixel counts. All three runs used data version `6a0c8cc2708d6616c0bfb9f3f5095708.dir`.
+
+| Model | MLflow run ID | Git commit | mIoU | Pixel accuracy | Bareland | Rangeland | Tree | Water | Agriculture | Building |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Majority class | `901302cb1dfe4cafa6fc85236091a459` | `07c41af971fd4d29cf6f51d1f17dae126eaf3eef` | 0.0456 | 0.2735 | 0.0000 (660,088) | 0.0000 (688,132) | 0.0000 (330,408) | 0.0000 (1,057,240) | 0.2735 (1,035,380) | 0.0000 (14,896) |
+| Random forest | `4565bb91a82c40de8c83dea560aee462` | `07c41af971fd4d29cf6f51d1f17dae126eaf3eef` | 0.1478 | 0.2558 | 0.2133 (660,088) | 0.2523 (688,132) | 0.3025 (330,408) | 0.0269 (1,057,240) | 0.0658 (1,035,380) | 0.0258 (14,896) |
+| U-Net (Colab L4, 40 epochs) | `d8c2abf763d5438d93df7dc3dfdda42a` | `c1f77a319a1a25d6164d01703b89f318ce3174e9` | 0.3355 | 0.4340 | 0.1823 (660,088) | 0.2031 (688,132) | 0.4748 (330,408) | 0.1615 (1,057,240) | 0.3413 (1,035,380) | 0.6502 (14,896) |
+
+The majority-class rule beat the forest on pixel accuracy. Both trained models beat the rule on mIoU, the promotion metric. The forest is version 1 of `landcover-segmenter`. The U-Net has the highest mIoU and is version 2 with the `champion` alias. Both versions returned valid 512×512 class masks on a development tile, and the U-Net also loaded and predicted by alias.
+
+The commits share the same model and training code, lockfile and DVC pointer. The historical Random Forest v1 repeated on CPU at **0.1478 mIoU**, matching the original score to four decimals with a tolerance of 0.01. Its reproduction is MLflow run `77375bfa9d574a74884c68213713593c`. Both Colab L4 repeats of historical U-Net v2 used the pinned EfficientNet-B4 encoder revision `c474abe5a8689bd017e9a50b41aa72ac253a63e1` and matched the original **0.3355 mIoU**. With zero observed difference, the tolerance is the minimum of 0.02. [Reproduction run IDs](../README.md#reproduction)
 
 ## 7.3 Placeholder
 
@@ -481,9 +561,9 @@ Lab 4 fills this section with deployed throughput, p50 and p95 latency and resou
 
 ## 7.4 Milestones
 
-- **Lab 2** adds versioned data pulls, idempotent batch ingestion with a check that stops the run for a deliberately invalid batch, the random-forest baseline and U-Net candidate, and MLflow runs and models with the data version and commit.
+- **Lab 2** adds versioned data pulls, idempotent batch ingestion with a check that stops the run for a deliberately invalid batch, the majority-class baseline, the random forest and the U-Net trained on a split by whole batch, an MLflow server with a PostgreSQL backend and an object-store artifact store, runs and registered versions tagged with the data version and commit, the `champion` alias, and one command that reproduces a registered version.
 - **Lab 3** adds the versioned retrieval corpus and prompts, and evaluates the assistant with and without retrieval, recording tokens, cost and p50/p95.
 - **Lab 4** deploys the segmentation service and assistant on Minikube with health probes, scheduled drift reports and an injected data shift that triggers an alert sent to the operator.
 - **Lab 5** gives the assistant inspect, segment, validate and export tools, with persistent (saved) traces and ten tasks, each evaluated twice.
 
-**Storage checks (Lab 2).** Lab 2 will verify S3 upload, read, list and delete operations and file checksums, including a 128 MiB file, multipart archives and completed objects after a restart. It will check valid, expired and altered signed URLs with [signature verification](https://github.com/floci-io/floci/blob/2.3.0/docs/services/s3.md#signature-verification) enabled, plus DVC push/pull and MLflow artifact upload/download. Endpoint access will be checked from the Mac in Lab 2 and from Minikube in Lab 4. These checks have not yet been run.
+**Storage checks (Lab 2).** The DVC check ran against pgsty/silo from the Mac: with the workspace copy and the local DVC cache deleted, `make data` fetched the sample, matched it to `data/raw.dvc` and pushed it; with both deleted again, `dvc pull` restored the data with hash verification and `dvc status` reported no changes. The MLflow artifact check ran against the same store from the Mac: `make train` uploaded each run's `run.json` and model through the MLflow server to the bucket `landcover-mlflow`, and `make register` downloaded the registered version through the server, with `MLFLOW_ENABLE_PROXY_MULTIPART_DOWNLOAD=false`, and predicted a 512×512 mask. Loading the version by `champion` also succeeded with the store credentials unset, so clients need only the tracking address. The upload and signed-URL checks, including a 128 MiB file, multipart uploads, objects after a restart and endpoint access from Minikube, move to Lab 4.

@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 725" width="1000" height="725" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 775" width="1000" height="775" role="img" aria-labelledby="title desc">
   <title id="title">Data flow of the land-cover system on the seven layers</title>
-  <desc id="desc">Row one has two lanes. Uploads enter 1 data ingestion through the segmentation API, pass an input check of size, format and 8-bit RGB, are decoded and tiled in 2 preprocessing, and reach the online side of 3 the feature layer as tensors computed with the same configuration. Training batches from OEM and FLAIR-HUB enter through Airflow. The version point takes a raw manifest snapshot of training batches only; 2 preprocessing remaps their labels to OEM-8 and tiles them; the quality gate checks grids, class IDs and new checksums; the offline side holds the accepted dataset version committed with DVC. Training and serving diverge at the feature layer. The offline side feeds 4 the training pipeline: a Colab Pro run started by the operator, plus the random-forest baseline on CPU. A dashed manual step exports weights, metrics and lineage to Google Drive and imports them, after verification, into 5 the MLflow registry, where the promotion rule applies and the operator moves the champion alias. The online side and the alias feed 6 inference: asynchronous jobs in a PostgreSQL queue with 1 to 4 CPU workers, which return the map package to the GIS user. Inference sends input statistics, class shares and job metrics to 7 monitoring, which emails the operator; the operator schedules the next labelled batch, which loops back to training. A valid re-upload creates a new job.</desc>
+  <desc id="desc">Row one has two lanes. Uploads enter 1 data ingestion through the segmentation API, pass an input check of size, format and 8-bit RGB, are decoded and tiled in 2 preprocessing, and reach the online side of 3 the feature layer as tensors computed with the same configuration. Training batches are FLAIR-HUB files at a pinned commit, fetched by make data and versioned with DVC in pgsty/silo; the version point is the data/raw.dvc hash, for training batches only. The Airflow tasks extract and validate check the batch structure; transform in 2 preprocessing remaps labels to OEM-8 in memory and counts class pixels and channel means; load writes dwh.tiles. On the offline side, build_features fills features.tile_features in PostgreSQL. The quality gate at quality_check refuses a batch whose ignored-pixel share exceeds 0.90 and removes its rows. Training and serving diverge at the feature layer. The quality gate clears the batch for training. The training pipeline reads the raw files at the version point: make train fits the majority-class rule, the random forest or the U-Net on the Mac, and make train-remote trains the U-Net on a Colab L4; each writes a result directory runs/&lt;model&gt;-&lt;commit7&gt;-&lt;id&gt;. The log step checks the model file's hash and score and records the run in 5 the MLflow 3.16.1 server, which keeps runs in the PostgreSQL database mlflow and files in the silo bucket landcover-mlflow; the operator registers versions of the model landcover-segmenter and moves its champion alias. The online side and the alias feed 6 inference: asynchronous jobs in a PostgreSQL queue with 1 to 4 CPU workers, which return the map package to the GIS user. Inference sends input statistics, class shares and job metrics to 7 monitoring, which emails the operator; the operator schedules the next labelled batch, which loops back to training. A valid re-upload creates a new job.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
       <path d="M0,0 L10,5 L0,10 z" fill="#1f2937"/>
@@ -24,33 +24,41 @@
     .pin { stroke: #b91c1c; stroke-width: 1.5; stroke-dasharray: 4 3; fill: none; }
     .foot { font-size: 13px; fill: #4b5563; }
   </style>
-  <rect width="1000" height="725" fill="#ffffff"/>
+  <rect width="1000" height="775" fill="#ffffff"/>
 
   <!-- Row 1: upload lane on top, training lane below -->
-  <rect class="layer" x="20" y="50" width="215" height="192" rx="8"/>
+  <rect class="layer" x="20" y="50" width="215" height="222" rx="8"/>
   <text class="name" x="32" y="74">1 Data ingestion</text>
   <rect class="side" x="32" y="90" width="191" height="60" rx="5"/>
   <text class="lanename" x="44" y="113">uploads</text>
   <text class="lane" x="44" y="136">segmentation API</text>
-  <rect class="side" x="32" y="162" width="191" height="60" rx="5"/>
-  <text class="lanename" x="44" y="185">training batches</text>
-  <text class="lane" x="44" y="208">OEM, FLAIR-HUB (Airflow)</text>
+  <rect class="side" x="32" y="162" width="191" height="100" rx="5"/>
+  <text class="lanename" x="44" y="182">training batches</text>
+  <text class="lane" x="44" y="200">FLAIR-HUB, pinned commit</text>
+  <text class="lane" x="44" y="218">make data → DVC in</text>
+  <text class="lane" x="44" y="236">pgsty/silo; dvc pull</text>
+  <text class="lane" x="44" y="254">Airflow: extract, validate</text>
 
-  <rect class="layer" x="300" y="50" width="215" height="192" rx="8"/>
+  <rect class="layer" x="300" y="50" width="215" height="222" rx="8"/>
   <text class="name" x="312" y="74">2 Preprocessing</text>
   <rect class="side" x="312" y="90" width="191" height="60" rx="5"/>
   <text class="lane" x="324" y="125">decode, 512×512 tiles</text>
-  <rect class="side" x="312" y="162" width="191" height="60" rx="5"/>
-  <text class="lane" x="324" y="185">remap labels to OEM-8,</text>
-  <text class="lane" x="324" y="208">512×512 tiles</text>
+  <rect class="side" x="312" y="162" width="191" height="100" rx="5"/>
+  <text class="lanename" x="324" y="182">transform</text>
+  <text class="lane" x="324" y="200">remap labels to OEM-8</text>
+  <text class="lane" x="324" y="218">in memory; class pixels,</text>
+  <text class="lane" x="324" y="236">channel means</text>
+  <text class="lane" x="324" y="254">load → dwh.tiles</text>
 
-  <rect class="layer" x="580" y="50" width="260" height="192" rx="8"/>
+  <rect class="layer" x="580" y="50" width="260" height="222" rx="8"/>
   <text class="name" x="592" y="74">3 Feature layer (no service)</text>
-  <rect class="side" x="592" y="162" width="126" height="68" rx="5"/>
+  <rect class="side" x="592" y="162" width="126" height="100" rx="5"/>
   <text class="lanename" x="655" y="182" text-anchor="middle">offline</text>
-  <text class="lane" x="655" y="201" text-anchor="middle">accepted dataset</text>
-  <text class="lane" x="655" y="219" text-anchor="middle">version (DVC)</text>
-  <rect class="side" x="730" y="90" width="98" height="140" rx="5"/>
+  <text class="lane" x="655" y="200" text-anchor="middle">build_features →</text>
+  <text class="lane" x="655" y="218" text-anchor="middle">features.</text>
+  <text class="lane" x="655" y="236" text-anchor="middle">tile_features</text>
+  <text class="lane" x="655" y="254" text-anchor="middle">(PostgreSQL)</text>
+  <rect class="side" x="730" y="90" width="98" height="172" rx="5"/>
   <text class="lanename" x="779" y="113" text-anchor="middle">online</text>
   <text class="lane" x="779" y="136" text-anchor="middle">tensors from</text>
   <text class="lane" x="779" y="155" text-anchor="middle">the upload,</text>
@@ -66,73 +74,82 @@
   <text class="marksub" x="267" y="36" text-anchor="middle">size, format, 8-bit RGB</text>
   <line class="pin" x1="267" y1="42" x2="267" y2="118"/>
 
-  <line class="pin" x1="267" y1="194" x2="267" y2="254"/>
-  <text class="mark" x="267" y="266" text-anchor="middle">VERSION POINT</text>
-  <text class="marksub" x="267" y="281" text-anchor="middle">training batches only:</text>
-  <text class="marksub" x="267" y="296" text-anchor="middle">raw manifest snapshot</text>
+  <line class="pin" x1="267" y1="194" x2="267" y2="284"/>
+  <text class="mark" x="267" y="296" text-anchor="middle">VERSION POINT</text>
+  <text class="marksub" x="267" y="311" text-anchor="middle">training batches only:</text>
+  <text class="marksub" x="267" y="326" text-anchor="middle">data/raw.dvc hash</text>
 
-  <line class="pin" x1="547" y1="194" x2="547" y2="254"/>
-  <text class="mark" x="547" y="266" text-anchor="middle">QUALITY GATE</text>
-  <text class="marksub" x="547" y="281" text-anchor="middle">grids, class IDs,</text>
-  <text class="marksub" x="547" y="296" text-anchor="middle">new checksums</text>
+  <line class="pin" x1="547" y1="194" x2="547" y2="284"/>
+  <text class="mark" x="547" y="296" text-anchor="middle">QUALITY GATE</text>
+  <text class="marksub" x="547" y="311" text-anchor="middle">quality_check: ignored</text>
+  <text class="marksub" x="547" y="326" text-anchor="middle">share ≤ 0.90, else no rows</text>
 
-  <text class="mark" x="717" y="262" text-anchor="middle">TRAINING /</text>
-  <text class="mark" x="717" y="277" text-anchor="middle">SERVING</text>
-  <text class="mark" x="717" y="292" text-anchor="middle">DIVERGE</text>
+  <text class="mark" x="717" y="292" text-anchor="middle">TRAINING /</text>
+  <text class="mark" x="717" y="307" text-anchor="middle">SERVING</text>
+  <text class="mark" x="717" y="322" text-anchor="middle">DIVERGE</text>
 
   <!-- Divergence -->
-  <polyline class="flow" points="655,230 655,322 110,322 110,348"/>
-  <text class="label" x="380" y="315" text-anchor="middle">training path (offline side)</text>
-  <line class="flow" x1="779" y1="230" x2="779" y2="348"/>
-  <text class="label" x="791" y="300">serving path</text>
-  <text class="label" x="791" y="316">(online side)</text>
+  <polyline class="flow" points="655,262 655,352 110,352 110,378"/>
+  <text class="label" x="380" y="345" text-anchor="middle">training path (offline side)</text>
+  <line class="flow" x1="779" y1="262" x2="779" y2="378"/>
+  <text class="label" x="791" y="330">serving path</text>
+  <text class="label" x="791" y="346">(online side)</text>
 
+  <g transform="translate(0 30)">
   <!-- Row 2 -->
-  <rect class="layer" x="20" y="350" width="195" height="130" rx="8"/>
+  <rect class="layer" x="20" y="350" width="195" height="170" rx="8"/>
   <text class="name" x="32" y="374">4 Training pipeline</text>
-  <text class="sub" x="32" y="400">Colab Pro run, started</text>
-  <text class="sub" x="32" y="420">by the operator;</text>
-  <text class="sub" x="32" y="440">RF baseline on CPU</text>
+  <text class="sub" x="32" y="400">make train: rule, forest</text>
+  <text class="sub" x="32" y="420">or U-Net on the Mac;</text>
+  <text class="sub" x="32" y="440">make train-remote:</text>
+  <text class="sub" x="32" y="460">U-Net on a Colab L4;</text>
+  <text class="sub" x="32" y="480">result directory</text>
+  <text class="sub" x="32" y="500">runs/&lt;model&gt;-&lt;commit7&gt;-&lt;id&gt;</text>
 
-  <rect class="layer" x="315" y="350" width="200" height="130" rx="8"/>
+  <rect class="layer" x="315" y="350" width="200" height="170" rx="8"/>
   <text class="name" x="327" y="374">5 Registry and deploy</text>
-  <text class="sub" x="327" y="400">MLflow model versions,</text>
-  <text class="sub" x="327" y="420">promotion rule (§5.4);</text>
-  <text class="sub" x="327" y="440">operator moves champion</text>
+  <text class="sub" x="327" y="400">MLflow 3.16.1 server:</text>
+  <text class="sub" x="327" y="420">runs in PostgreSQL mlflow,</text>
+  <text class="sub" x="327" y="440">files in silo bucket</text>
+  <text class="sub" x="327" y="460">landcover-mlflow;</text>
+  <text class="sub" x="327" y="480">model landcover-segmenter,</text>
+  <text class="sub" x="327" y="500">alias champion</text>
 
-  <rect class="layer" x="580" y="350" width="260" height="130" rx="8"/>
+  <rect class="layer" x="580" y="350" width="260" height="170" rx="8"/>
   <text class="name" x="592" y="374">6 Inference</text>
   <text class="sub" x="592" y="400">async jobs, PostgreSQL queue,</text>
   <text class="sub" x="592" y="420">1–4 CPU workers: tile,</text>
   <text class="sub" x="592" y="440">predict, stitch, export</text>
 
-  <rect class="ext" x="886" y="350" width="104" height="130" rx="8"/>
+  <rect class="ext" x="886" y="350" width="104" height="170" rx="8"/>
   <text class="name" x="938" y="408" text-anchor="middle">GIS user</text>
   <text class="sub" x="938" y="432" text-anchor="middle">map package</text>
 
-  <line class="manual" x1="217" y1="415" x2="313" y2="415"/>
-  <text class="mark" x="265" y="405" text-anchor="middle">MANUAL</text>
-  <text class="label" x="265" y="436" text-anchor="middle" style="font-size:12px">Drive export,</text>
-  <text class="label" x="265" y="452" text-anchor="middle" style="font-size:12px">verified import</text>
+  <line class="flow" x1="217" y1="415" x2="313" y2="415"/>
+  <text class="mark" x="265" y="405" text-anchor="middle">LOG STEP</text>
+  <text class="label" x="265" y="436" text-anchor="middle" style="font-size:12px">hash and score</text>
+  <text class="label" x="265" y="452" text-anchor="middle" style="font-size:12px">checked</text>
   <line class="flow" x1="517" y1="415" x2="578" y2="415"/>
   <text class="label" x="547" y="405" text-anchor="middle" style="font-size:12px">by alias</text>
   <line class="flow" x1="842" y1="415" x2="884" y2="415"/>
   <text class="label" x="863" y="405" text-anchor="middle" style="font-size:12px">results</text>
 
   <!-- Row 3 -->
-  <rect class="mon" x="315" y="560" width="525" height="100" rx="8"/>
-  <text class="name" x="330" y="584">7 Monitoring and retraining loop</text>
-  <text class="sub" x="330" y="608">Prometheus, Grafana, daily Evidently report:</text>
-  <text class="sub" x="330" y="628">failures, latency, input drift, class shares</text>
-  <text class="sub" x="330" y="648">→ email to the operator</text>
+  <rect class="mon" x="315" y="580" width="525" height="100" rx="8"/>
+  <text class="name" x="330" y="604">7 Monitoring and retraining loop</text>
+  <text class="sub" x="330" y="628">Prometheus, Grafana, daily Evidently report:</text>
+  <text class="sub" x="330" y="648">failures, latency, input drift, class shares</text>
+  <text class="sub" x="330" y="668">→ email to the operator</text>
 
-  <line class="flow" x1="710" y1="482" x2="710" y2="558"/>
-  <text class="label" x="722" y="512">input stats, class shares,</text>
-  <text class="label" x="722" y="528">job metrics</text>
+  <line class="flow" x1="710" y1="522" x2="710" y2="578"/>
+  <text class="label" x="722" y="546">input stats, class shares,</text>
+  <text class="label" x="722" y="562">job metrics</text>
 
-  <polyline class="flow" points="313,610 110,610 110,482"/>
-  <text class="label" x="212" y="582" text-anchor="middle">operator schedules</text>
-  <text class="label" x="212" y="598" text-anchor="middle">the next labelled batch</text>
+  <polyline class="flow" points="313,630 110,630 110,522"/>
+  <text class="label" x="212" y="602" text-anchor="middle">operator schedules</text>
+  <text class="label" x="212" y="618" text-anchor="middle">the next labelled batch</text>
 
-  <text class="foot" x="500" y="705" text-anchor="middle">A valid re-upload creates a new job.</text>
+  </g>
+
+  <text class="foot" x="500" y="755" text-anchor="middle">A valid re-upload creates a new job.</text>
 </svg>

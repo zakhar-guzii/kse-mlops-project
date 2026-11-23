@@ -2,10 +2,36 @@
 name = "kse-mlops-project"
 version = "0.1.0"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "joblib==1.6.0",
+    "mlflow==3.16.1",
+    "numpy==2.5.5",
+    "psycopg[binary]==3.3.9",
+    "rasterio==1.5.2",
+    "scikit-image==0.26.0",
+    "scikit-learn==1.9.1",
+]
 
 [dependency-groups]
+demo = [
+    "ipython==9.19.1",
+    "jupyterlab==4.6.6",
+    "matplotlib==3.11.2",
+]
 dev = [
+    "dvc==3.67.1",
+    "dvc-s3==3.3.0",
     "pre-commit==4.7.0",
+    "pytest==9.2.0",
     "ruff==0.17.2",
 ]
+nn = [
+    "huggingface-hub==2.4.0",
+    "segmentation-models-pytorch==0.5.0",
+    "timm==1.0.31",
+    "torch==2.15.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "scripts"]
+filterwarnings = ["ignore::rasterio.errors.NotGeoreferencedWarning"]
