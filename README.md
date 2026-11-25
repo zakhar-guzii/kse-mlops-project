@@ -457,3 +457,275 @@ Configuration for Lab 4:
 | Answer command at k = 10 | `/usr/bin/time -l make answer-eval TOP_K=10` | 999 MiB maximum resident set size: the embedding model, the client and MLflow |
 
 Most of the server's footprint is its prompt cache in host memory, which grows with use up to the default 8,192 MiB of `--cache-ram`; the clean pages of the model file can be dropped by macOS under pressure and read again. Without the clean pages the three take about 13 GiB of the Mac's 24 GiB; Minikube comes in Lab 4 and is measured there.
+
+## Lab 4: services
+
+Lab 4 serves the Lab 2 model and the Lab 3 answers over HTTP as two images built from this repository. Both listen on port 8000 and expose `/health/live`, `/health/ready` and `/metrics`.
+
+| Image | Endpoint | What it does |
+|---|---|---|
+| `landcover-ml:<commit>` | `POST /predict` | Takes one 8-bit image with at least three bands (GeoTIFF, PNG or JPEG) as the raw body. Returns the class mask as a base64 GeoTIFF on the input's grid, the model name and version that produced it, the image commit, the RGB means and brightness, the class shares and a dark-image warning. Loads the model by registry name and alias. |
+| `landcover-llm:<commit>` | `POST /ask` | Takes `{"question": "..."}` and retrieves `top_k` passages from the Lab 3 index. It answers with `prompts/rag.md` through the text model of `make llm-server`, which stays on the host, and returns the cited passages with document, version and section. |
+
+The course service answers one image per request in the same HTTP response, up to 1024×1024 pixels and 16 MiB. The job queue, workers, tiling of large images and the 24-hour retention of the design (Sections 6.2 and 6.3) stay product description.
+
+### Build
+
+```sh
+make images
+```
+
+The command refuses a tree with uncommitted changes to tracked files. It builds both targets of [docker/serve/Dockerfile](docker/serve/Dockerfile) from `git archive HEAD` and tags them `landcover-ml:<commit>` and `landcover-llm:<commit>` with the full SHA of `HEAD`. An image therefore holds exactly the committed files, never `.env`, `runs/` or `models/`. The same SHA is in the label `org.opencontainers.image.revision`, in the environment variable `IMAGE_COMMIT` and in every response. Both images install the dependency group `serve`, which takes the CPU-only build of torch (`2.15.0+cpu`). The groups `nn` and `rag` keep the CUDA build for Colab. The LLM image also holds `intfloat/multilingual-e5-small` at the revision of `retrieval.toml` and runs with `HF_HUB_OFFLINE=1`.
+
+Measured at commit `d0d7818` on the M4 Pro (linux/arm64):
+
+| Image | Compressed (`docker image inspect`) | Unpacked (`docker image ls`) |
+|---|---|---|
+| `landcover-ml` | 641 MB | 2.94 GB |
+| `landcover-llm` | 930 MB | 3.72 GB |
+
+The first build downloads about 1 GB and took under 2 minutes. torch takes 688 MB of the unpacked virtual environment, which is 2.0 GB in all, and the embedding model 471 MB.
+
+### Run on the Compose network
+
+The services read their configuration from the environment:
+
+| Variable | Service | Default |
+|---|---|---|
+| `MLFLOW_TRACKING_URI` | ML | required |
+| `MODEL_NAME`, `MODEL_ALIAS` | ML | `landcover-segmenter`, `champion` |
+| `WAREHOUSE_DSN` | both | required |
+| `DARK_BRIGHTNESS` | ML | unset: no warning |
+| `MAX_PIXELS`, `MAX_BYTES` | ML | 1048576, 16777216 |
+| `LOAD_RETRY_SECONDS` | ML | 10 |
+| `LLM_BASE_URL` | LLM | `base_url` of `retrieval.toml` |
+| `MAX_QUESTION_CHARS` | LLM | 2000 |
+
+The model name, top-k, chunk settings and prompt of the LLM service come from `retrieval.toml` and `prompts/` as committed. Start the stack with `make up`; MLflow accepts the host `mlflow:5000` that the containers use. Then:
+
+```sh
+set -a; . ./.env; set +a
+C=$(git rev-parse HEAD)
+docker run -d --name ml --network kse-mlops-project_default -p 127.0.0.1:8000:8000 \
+  -e MLFLOW_TRACKING_URI=http://mlflow:5000 \
+  -e WAREHOUSE_DSN="postgresql://$POSTGRES_USER:$POSTGRES_PASSWORD@postgres/landcover" \
+  landcover-ml:$C
+curl -s --data-binary @data/raw/D017-2021/images/AA-S2-9_2-7.tif \
+  -H 'X-Source-Id: D017-2021/AA-S2-9_2-7' localhost:8000/predict | jq 'del(.mask)'
+```
+
+```json
+{
+  "request_id": "c1b789f2-5bf7-47eb-a207-e0415f130d2a",
+  "model_name": "landcover-segmenter",
+  "model_version": "2",
+  "image_commit": "d0d78181a077a6905228d28fc5d71eed4201112a",
+  "width": 512,
+  "height": 512,
+  "valid_px": 262144,
+  "features": {
+    "mean_r": 129.78781509399414,
+    "mean_g": 134.10511779785156,
+    "mean_b": 99.95866012573242,
+    "brightness": 121.2838643391927
+  },
+  "class_shares": {
+    "bareland": 0.000030517578125,
+    "rangeland": 0.001216888427734375,
+    "developed": 0.0,
+    "road": 0.0,
+    "tree": 0.00778961181640625,
+    "water": 0.0,
+    "agriculture": 0.9909629821777344,
+    "building": 0.0
+  },
+  "dark_warning": null
+}
+```
+
+With `make llm-server` running on the host:
+
+```sh
+docker run -d --name llm --network kse-mlops-project_default -p 127.0.0.1:8002:8000 \
+  -e LLM_BASE_URL=http://host.docker.internal:8081/v1 \
+  -e WAREHOUSE_DSN="postgresql://$POSTGRES_USER:$POSTGRES_PASSWORD@postgres/landcover" \
+  landcover-llm:$C
+curl -s localhost:8002/ask -H 'Content-Type: application/json' \
+  -d '{"question": "What does the value 255 mean in the output mask?"}' | jq
+```
+
+```json
+{
+  "answer": "In the output mask, the value 255 marks pixels that are ignored in training and invalid input pixels.\n\nSources: [4]",
+  "cited": [
+    4
+  ],
+  "sources": [
+    {
+      "n": 4,
+      "doc_id": "export-contract",
+      "doc_version": "209d12a719fc",
+      "locator": "5.1 Problem statement"
+    }
+  ],
+  "model": "gemma-4-12b-it-qat-q4_0",
+  "top_k": 10,
+  "index_version": "5570e99ba60e",
+  "prompt_hash": "4be4e95ed4e7",
+  "image_commit": "d0d78181a077a6905228d28fc5d71eed4201112a",
+  "tokens_in": 2028,
+  "tokens_out": 30,
+  "retrieval_s": 0.12357245798921213,
+  "generation_s": 8.26648533801199
+}
+```
+
+The container reaches llama-server, which listens on the host's `127.0.0.1:8081`, through Docker Desktop's `host.docker.internal`, so `make llm-server` is unchanged.
+
+### Health and the missing model
+
+`/health/live` answers 200 while the process runs and checks nothing else, so a failing dependency never makes Kubernetes restart the container.
+
+`/health/ready` answers 200 only when a request can succeed, and 503 with the reason otherwise:
+- **ML service:** the model is loaded and the request log is reachable.
+- **LLM service:** llama-server serves the model named in `retrieval.toml`, and the database holds the index built from the image's corpus and settings.
+
+The ML service resolves the alias to a version number once. A background thread retries every `LOAD_RETRY_SECONDS` until it has loaded that version, which then stays fixed until a restart. `/predict` answers 503 until then.
+
+The missing model, reproduced with an alias that the registry does not have (captured at commit `d0d7818`):
+
+```sh
+docker rm -f ml
+docker run -d --name ml --network kse-mlops-project_default -p 127.0.0.1:8000:8000 \
+  -e MLFLOW_TRACKING_URI=http://mlflow:5000 \
+  -e WAREHOUSE_DSN="postgresql://$POSTGRES_USER:$POSTGRES_PASSWORD@postgres/landcover" \
+  -e MODEL_ALIAS=missing landcover-ml:$C
+```
+
+```text
+$ curl -i localhost:8000/health/live
+HTTP/1.1 200 OK
+content-length: 13
+content-type: application/json
+
+{"live":true}
+
+
+$ curl -i localhost:8000/health/ready
+HTTP/1.1 503 Service Unavailable
+content-length: 148
+content-type: application/json
+
+{"ready":false,"reason":"landcover-segmenter@missing not loaded: RestException: INVALID_PARAMETER_VALUE: Registered model alias missing not found."}
+
+
+$ curl -i --data-binary @data/raw/D017-2021/images/AA-S2-9_2-7.tif localhost:8000/predict
+HTTP/1.1 503 Service Unavailable
+content-length: 134
+content-type: application/json
+
+{"detail":"landcover-segmenter@missing not loaded: RestException: INVALID_PARAMETER_VALUE: Registered model alias missing not found."}
+
+
+$ docker logs ml
+INFO:     Started server process [1]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+landcover-segmenter@missing not loaded: RestException: INVALID_PARAMETER_VALUE: Registered model alias missing not found.; retrying in 10 s
+```
+
+When the alias `missing` was then created on version 1, the same container became ready within 6 s without a restart:
+
+```text
+loaded landcover-segmenter version 1 (landcover-segmenter@missing), image d0d78181a077a6905228d28fc5d71eed4201112a
+```
+
+The alias was deleted afterwards.
+
+### Promotion without a rebuild
+
+With the ML container started as in [Run on the Compose network](#run-on-the-compose-network), on the alias `champion`:
+
+```text
+$ curl -s --data-binary @data/raw/D017-2021/images/AA-S2-9_2-7.tif localhost:8000/predict | jq .model_version
+"2"
+$ make champion VERSION=1
+uv run --locked python -m landcover.tracking champion 1
+landcover-segmenter@champion -> version 1
+$ docker restart ml
+ml
+$ until curl -sf localhost:8000/health/ready >/dev/null; do sleep 1; done
+$ curl -s --data-binary @data/raw/D017-2021/images/AA-S2-9_2-7.tif localhost:8000/predict | jq .model_version
+"1"
+```
+
+`make champion VERSION=2` and another restart returned the service to the U-Net. The mask of version 1 equals, pixel for pixel, the one `models.load_predictor("rf", "runs/rf-07c41af/model.joblib")` gives for the same tile, and that of version 2 equals the U-Net's. The image runs both because it carries the code for the rule, the random forest and the U-Net: the registry supplies the weights and the model kind, and the image tag names the code that runs them.
+
+### Request log
+
+The ML service writes every request it serves to `serving.predictions` in the database `landcover` before it responds. If the row cannot be written, the request fails with 500. The service creates the table from [sql/serving.sql](sql/serving.sql) at start-up.
+
+- **One row per request:** time received, model name and version, image commit, outcome (`ok`, `invalid` or `error`) and reason.
+- **Client and grid:** the client's optional `X-Source-Id`, grid size and valid pixel count.
+- **Inputs and outputs:** the RGB means and brightness over valid pixels on 0–255, the eight class shares of valid pixels, the dark-image warning and the mask.
+
+Requests refused with 503 before a model is loaded write no row. The drift job reads this table (`add-lab4-drift-alert`):
+
+```sh
+docker compose exec postgres psql -U "$POSTGRES_USER" -d landcover -c \
+  "SELECT received_at, model_version, outcome, source_id, round(brightness::numeric, 1) AS brightness,
+          round(share_agriculture::numeric, 3) AS agriculture FROM serving.predictions ORDER BY received_at DESC LIMIT 3"
+```
+
+```text
+          received_at          | model_version | outcome | source_id | brightness | agriculture
+-------------------------------+---------------+---------+-----------+------------+-------------
+ 2026-11-25 21:40:26.862036+00 | 2             | invalid |           |            |
+ 2026-11-25 21:40:25.576918+00 | 2             | ok      |           |      121.3 |       0.991
+ 2026-11-25 21:40:24.061165+00 | 2             | ok      |           |      121.3 |       0.991
+(3 rows)
+```
+
+### Metrics
+
+`/metrics` is in the Prometheus text format. Requests to the health and metrics endpoints are not counted.
+
+| Metric | Labels | Service |
+|---|---|---|
+| `landcover_requests_total` | `endpoint`, `outcome` (`ok`, `invalid`, `error`, `unavailable`), `model_version` on the ML service | both |
+| `landcover_request_seconds` (histogram) | `endpoint` | both |
+| `landcover_model_loaded` | — | ML |
+| `landcover_llm_stage_seconds` (histogram) | `stage` (`retrieve`, `generate`) | LLM |
+| `landcover_llm_tokens_total` | `direction` (`in`, `out`) | LLM |
+
+After two valid tiles and one invalid upload the ML service reports:
+
+```text
+landcover_requests_total{endpoint="/predict",model_version="2",outcome="ok"} 2.0
+landcover_requests_total{endpoint="/predict",model_version="2",outcome="invalid"} 1.0
+landcover_request_seconds_bucket{endpoint="/predict",le="0.05"} 1.0
+landcover_request_seconds_bucket{endpoint="/predict",le="0.1"} 1.0
+landcover_request_seconds_bucket{endpoint="/predict",le="0.25"} 1.0
+landcover_request_seconds_bucket{endpoint="/predict",le="0.5"} 1.0
+landcover_request_seconds_bucket{endpoint="/predict",le="1.0"} 1.0
+landcover_request_seconds_bucket{endpoint="/predict",le="2.5"} 3.0
+landcover_request_seconds_bucket{endpoint="/predict",le="5.0"} 3.0
+landcover_request_seconds_bucket{endpoint="/predict",le="10.0"} 3.0
+landcover_request_seconds_bucket{endpoint="/predict",le="+Inf"} 3.0
+landcover_request_seconds_count{endpoint="/predict"} 3.0
+landcover_request_seconds_sum{endpoint="/predict"} 2.7696777940145694
+landcover_model_loaded 1.0
+```
+
+### Measurements
+
+Measured in the ML container at commit `d0d7818`, with `OMP_NUM_THREADS=1` as the image sets it. The first request after start-up also warms up torch:
+
+| Input | First request | Peak memory of the container (`memory.peak`) |
+|---|---|---|
+| Idle, model loaded | — | 827 MiB |
+| 512×512 tile | 1.6 s | 969 MiB |
+| 1024×1024 image | 6.8 s | 1,145 MiB |
+
+On the Mac host a warm U-Net takes 0.32 s per 512×512 tile on one thread. One answer of the LLM service took 8.5 s, of which 0.09 s was retrieval and 8.46 s generation for 2,028 prompt and 30 completion tokens.

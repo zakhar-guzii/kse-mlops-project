@@ -404,9 +404,14 @@ The local column is the course deployment. The cloud columns describe the hypoth
 
 **Lab 3 text model.** `make llm-server` downloads `gemma-4-12b-it-qat-q4_0.gguf` from the Hugging Face revision `29d097773436b69ff9feafd636ab4cf873786537` into the ignored directory `models/`, refuses it on every start unless its SHA-256 equals the one in the `Makefile`, and runs `llama-server` (llama.cpp built by the same command from release `b12359`, commit `b1b770d90`) in the foreground on `127.0.0.1:8081` under the name `gemma-4-12b-it-qat-q4_0`, with a context of 8,192 tokens and one slot. The server runs on the host because Docker on this Mac has no GPU access, and on port 8081 because Airflow holds 8080. The address and the model name are the table `[llm]` of `retrieval.toml`.
 
-In Lab 4, a single documented startup command will deploy separate ML and thin text-LLM services with in-cluster MLflow on Minikube. Images carry the Git commit tag. Configuration supplies the ML, registry and host LLM endpoints and the retrieval configuration selected in Lab 3. Both services expose liveness and readiness probes. The smoke prediction will check the immutable version in the completed job. Withhold the model to demonstrate readiness failure, then change the alias to another approved version, restart and check that the next result reports that version.
+**Lab 4 services.** `make images` builds two images from `git archive HEAD`, each tagged with the full commit SHA and refused for a tree with uncommitted changes:
 
-The segmentation service is ready only after it loads the `champion` model and its preprocessing configuration. Without the model, the readiness probe reports that the service is not ready. The assistant is ready only when its LLM endpoint and corpus index respond.
+- **`landcover-ml`** serves `POST /predict`.
+- **`landcover-llm`** serves `POST /ask` over the Lab 3 index and prompt. It calls the host llama-server over HTTP, so the text model stays outside the container. The model name, top-k and prompt come from `retrieval.toml` and `prompts/` as committed.
+
+Both services listen on port 8000 and expose `/health/live`, `/health/ready` and `/metrics`. The registry address, the alias, the database and the text model server address come from the environment. Both images use the CPU-only torch build. The ML service records every served request in `serving.predictions` of the database `landcover`, the current window of the drift job (Section 6.6). A single documented command will deploy both services with in-cluster MLflow on Minikube.
+
+The segmentation service resolves `champion` to a version number once at start-up, loads that version and reports it in every response; a background loader retries until the load succeeds. Liveness checks only the process. Readiness holds back traffic until the model is loaded and the request log is reachable; an alias absent from the registry keeps the service not ready and `/predict` answers 503. Promotion is the alias and a restart, without a rebuild. The assistant is ready only when its LLM endpoint serves the configured model and the corpus index matches the image's corpus and settings.
 
 **Training exchange (course).** `make train-remote` requests a Colab L4 by default and sends the launcher `scripts/remote_train.py` with the public repository URL, commit and training arguments. The runtime installs the locked dependencies, fetches the pinned sample, checks it against `data/raw.dvc` and confirms the allocated GPU before training. The host verifies the returned model and record, releases the Colab session and logs the result to local MLflow.
 
@@ -448,6 +453,12 @@ The mean-load formula does not determine p95 completion time. A load test measur
 **Measurement method.** Limit a worker to 1 vCPU and 4 GiB. Measure cold start separately. For each image size, 1024×1024 and 4096×4096, perform 5 warm-up runs followed by 30 measured runs. Record the time spent at each stage and peak memory use.
 
 Replay twice the peak arrival rate for an hour. Record p95 completion time and queue wait. If the measured p95 completion time exceeds 5 minutes, first try ONNX Runtime or larger tiles. Then try more workers within the cost ceiling and the four-worker limit. Consider relaxing the target only after these steps.
+**Course service (Lab 4).** The course serves synchronous single-image requests: `POST /predict` takes one image of at most 1024×1024 pixels and 16 MiB and returns its mask in the same response. Without tiling, a larger image is refused. One process serves one request at a time; more throughput means more replicas.
+
+In the container (`OMP_NUM_THREADS=1`), the first 512×512 tile after start-up took 1.6 s and a 1024×1024 image 6.8 s, at a container memory peak of 969 MiB and 1,145 MiB. A warm U-Net takes 0.32 s per 512×512 tile on the Mac's CPU.
+
+The queue, workers, leases, retries, tiling and stitching above remain the product design and are not built in the course.
+
 **Text model (Lab 3 measurements).** Gemma 4 12B, quantisation-aware trained and stored as Q4_0 GGUF (6.98 GB), runs in llama-server with Metal on the M4 Pro (24 GiB unified memory), with a context of 8,192 tokens and one slot, so answers are sequential. Latency per answer, retrieval included, over the 32 questions:
 
 | Prompt | p50 | p95 | Prompt tokens per answer |
