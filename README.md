@@ -4,6 +4,8 @@ GIS specialists need a first land-cover layer for new aerial imagery, which they
 
 Lab 2 implements versioned FLAIR-HUB ingestion, training for three segmentation models and a local MLflow registry. The current `champion` is U-Net version 2, trained on Colab L4. It scored **0.3355 mIoU** on the six-class development control. [Lab 2 results](#results) · [Model demo](#model-demo)
 
+Lab 3 adds the GIS assistant's documentation answers: a versioned retrieval index over five public documents, a local Gemma 4 12B with versioned prompt files, and an evaluation that chose top-k 10, where **25 of 32** answers are judged correct (24 by the reviewed labels) against 16 without retrieval. [Lab 3 answers](#lab-3-retrieval-augmented-answers)
+
 ## Maturity scorecard
 
 | Property | Evidence a reviewer checks | Added in |
@@ -15,6 +17,9 @@ Lab 2 implements versioned FLAIR-HUB ingestion, training for three segmentation 
 | Quality gate present | The broken batch fails `quality_check` on purpose, with a screenshot ([Broken batch](#broken-batch)) | Lab 2 |
 | Experiments tracked | Every run in MLflow has its parameters, scores, `data_version` and `git_commit` ([Training and logging](#training-and-logging), [Results](#results)) | Lab 2 |
 | Models registered with lineage | Both versions carry the data version and code commit. `make reproduce VERSION=1` reproduced the registered random forest on CPU ([Reproduction](#reproduction)). U-Net version 2 carries `champion` ([Results](#results)). | Lab 2 |
+| LLM component evaluated | `make answer-eval TOP_K=<n>` logs hit rate, MRR and the judged answer metric for 32 questions; the table compares the plain baseline with top-k 3, 5 and 10, and the judge is checked against reviewed labels ([Lab 3: retrieval-augmented answers](#lab-3-retrieval-augmented-answers), [eval/judge-check-rag.toml](eval/judge-check-rag.toml)) | Lab 3 |
+| Prompts versioned | Each prompt is a file in [prompts/](prompts/), and every run of `landcover-answers` carries its `prompt_hash` and `judge_prompt_hash`, the first 12 hex digits of the file's SHA-256 ([Lab 3: LLM baseline](#lab-3-llm-baseline)) | Lab 3 |
+| Cost and latency recorded | Every answer run logs tokens in and out, a shadow cost, compute seconds and p50/p95 latency; the columns of the [answer table](#lab-3-retrieval-augmented-answers) give them per run | Lab 3 |
 
 ## Lab 1 status
 
@@ -273,3 +278,182 @@ Registered versions of `landcover-segmenter`
 Open the [model comparison notebook](notebooks/landcover-model-demo.ipynb) to see three aerial images with reference masks, predictions from all three saved models and a U-Net overlay. The figures and the validation score table are saved in the notebook.
 
 To rerun inference, use the saved result directories `runs/rule-07c41af`, `runs/rf-07c41af` and `runs/unet-c1f77a3`, plus the DVC sample under `data/raw/`. The notebook includes the JupyterLab command with the locked `demo` dependency group and uses the saved weights directly.
+
+## Lab 3: retrieval index
+
+The GIS assistant answers questions about the export package from public documentation, with citations. The corpus has 5 documents: four cleaned Markdown copies in [corpus/](corpus/) (the OpenEarthMap and FLAIR-HUB papers, the USGS NAIP data dictionary and the QGIS raster properties page) and `export-contract`, which is Sections 5.1 and 6.8 of [docs/design.md](docs/design.md), read when the index is built. [corpus/manifest.toml](corpus/manifest.toml) records each copy's source URLs, access date and SHA-256.
+
+With the stack up (see [Local stack](#local-stack)):
+
+```sh
+make retrieval-index
+```
+
+```
+index 5570e99ba60e: 5 documents, 575 chunks (intfloat/multilingual-e5-small, 600/100)
+check "What does the value 255 mean in the output mask?" -> export-contract, 5.1 Problem statement, distance 0.160
+```
+
+The command checks every copy against its SHA-256 in the manifest, splits each document into chunks that stay inside one section, embeds them on the CPU and replaces the schema `retrieval` of the database `landcover` in one transaction. Before committing, it asks the fixed question above and fails unless a chunk of Section 5.1 is among the top-k results; a failed build leaves the previous index in place. The first line gives the index version, which changes with any document, with the chunking or model settings, or with `INDEX_FORMAT`, the version of the chunking and embedding code; the chunk count and version above change whenever Section 5.1 or 6.8 of the design is edited, while the document count stays 5.
+
+The settings are in [retrieval.toml](retrieval.toml): chunk size and overlap in characters, the embedding model with its pinned revision, and top-k. The command runs on the host with the `rag` dependency group, which `make setup` does not install. The first run downloads the model from Hugging Face (471 MB) and needs network access; later runs use the Hugging Face cache. PostgreSQL, now the `pgvector/pgvector:0.8.7-pg16-trixie` image, is published on `127.0.0.1:5433`; the command connects there with the credentials of `.env` unless `WAREHOUSE_DSN` is set.
+
+## Lab 3: retrieval evaluation
+
+The evaluation set [eval/questions.toml](eval/questions.toml) has 32 questions in English: 6 on `export-contract`, 8 on the QGIS page, 8 on the OpenEarthMap paper, 6 on FLAIR-HUB and 4 on the NAIP dictionary. Each question has a reference answer and one or more sources: a document, a section locator and a short evidence quote copied from that section. Claude (`claude-opus-5-5`) drafted the questions from the corpus; the author read every question, answer and quote against its section. The tests check that every section exists in the chunked corpus, that one of its chunks holds the quote, and that no question names its document or shares four consecutive words with its passage.
+
+A retrieved chunk is a hit when it lies in a cited section and contains that source's evidence quote. Hit rate at k is the share of questions with a hit in the first k chunks; MRR at k is the mean of 1 / rank of the first hit, 0 when there is none.
+
+With the stack up, a current index and a clean working tree:
+
+```sh
+make retrieval-eval TOP_K=3
+make retrieval-eval TOP_K=5
+make retrieval-eval                # top_k of retrieval.toml, 10
+```
+
+```
+run 1bbbd66d: top_k 5, 32 questions, hit rate 0.656, MRR 0.450, p50 0.011 s, p95 0.013 s (index 5570e99ba60e, questions 5e2556f998a1)
+```
+
+The command refuses uncommitted changes and an index that was not built from the committed corpus and `retrieval.toml`. It logs one run to the MLflow experiment `landcover-retrieval` with the settings, the tags `git_commit`, `index_version` and `eval_set` (the first 12 hex digits of the SHA-256 of the question file), both metrics, the seconds of the 32 searches (`retrieval_s`) with their p50 and p95 per question, and `results.json` with each question's first-hit rank and retrieved chunks. A search includes the embedding of the question on the CPU; loading the model does not count.
+
+Index `5570e99ba60e`, evaluation set `5e2556f998a1`, commit `c472b1a1301f18cf228d868ced02d02570c5310f`:
+
+| top-k | Hit rate | MRR | Search p50 | Search p95 | Run ID |
+|---|---|---|---|---|---|
+| 3 | 0.531 | 0.422 | 0.011 s | 0.013 s | `f01baf6f55854c988c732d28f60d762a` |
+| 5 | 0.656 | 0.450 | 0.011 s | 0.013 s | `1bbbd66dfd6343f18be0cc4cc9bc2f21` |
+| 10 | 0.844 | 0.473 | 0.011 s | 0.013 s | `c50f9644767e43a0b5b47e243cfeb380` |
+
+The 32 searches took 0.38 to 0.39 s per run. At k = 5, the NAIP dictionary misses 3 of its 4 questions, FLAIR-HUB 3 of 6, the QGIS page 3 of 8, the OpenEarthMap paper 2 of 8 and `export-contract` none of 6. One question moves the hit rate by 3.1 points. The search is exact, so the three rows are cuts of one ranking and cannot fall as k grows. The table shows what a larger k buys; it cannot choose k, which also depends on the answer quality, latency and prompt length measured in [Lab 3: retrieval-augmented answers](#lab-3-retrieval-augmented-answers), which chooses k = 10. They replace runs `1405ba4d9eba46a88121bb6cb7ea97c9`, `c001c9b19cee4abb9b9761b9a655e100` and `a11718188dd549dc8542bd70f145d6f2` on set `d06b7a39c631` and index `56be0057b30e` (hit rate 0.469, 0.594 and 0.750), which replaced runs `14432e325a7340a589863ee502645872`, `04d99fd20ead4599bd42740aa8a4de15` and `78971d105bfe4dc68d57fe40951a5a96` on the first set `0174445a4974`. The set was revised a second time after the review of Lab 3: q08 accepts both ways the QGIS page gives to make a value transparent, q25 and q26 ask about the dataset's published experiments rather than about this project's model, whose crosswalk and split differ, q23 quotes the part of its evidence sentence that one chunk holds whole, and q25 and q28 cite the further passages of FLAIR-HUB that state their answers. q29 still contains the code it asks about: the dictionary lists CNIR, CLR and CIR, so a question asking for the code of colour infrared imagery would have two answers. The index version changed because it now includes `INDEX_FORMAT`; the chunks are the same.
+
+## Lab 3: LLM baseline
+
+The text model is Gemma 4 12B QAT Q4_0, served by `llama-server` from [llama.cpp](https://github.com/ggml-org/llama.cpp) release `b12359` on the Mac host with Metal. Start it in a separate terminal:
+
+```sh
+make llm-server
+```
+
+The first start clones llama.cpp at tag `b12359` into the ignored directory `models/llama.cpp`, checks that the commit is `b1b770d90` and builds `llama-server` with CMake 3.31.6, which `uvx` takes from PyPI; it needs Git and the Xcode command line tools, and the built server reports build `b12359-b1b770d90`. It then downloads `gemma-4-12b-it-qat-q4_0.gguf` (6.98 GB) from a pinned Hugging Face revision into `models/`; an interrupted download resumes when the command is run again. The file gets its final name only after its SHA-256 matches the one in the `Makefile`, and the command checks the hash again on every start, so a damaged or replaced file stops the command before the server starts. The server listens on `http://127.0.0.1:8081/v1` and speaks the OpenAI chat completions protocol; its address and model name are the table `[llm]` of [retrieval.toml](retrieval.toml).
+
+With the stack and the server up and a clean working tree:
+
+```sh
+make answer-eval
+```
+
+```
+run e6d9e1d6: plain, 32 questions, correct 0.500, tokens 3822 in / 1346 out, p50 1.8 s, p95 2.9 s, shadow cost $0.0211 (prompt e88db3af2e2d, judge a11f648cb1f0, questions 5e2556f998a1)
+```
+
+The command sends every question of [eval/questions.toml](eval/questions.toml) to the model with [prompts/plain.md](prompts/plain.md), which holds no retrieved passage, at temperature 0 with at most 256 output tokens. The same model then judges each answer against the question's reference answer with [prompts/judge.md](prompts/judge.md) and returns `correct` or `incorrect` as schema-constrained JSON; an answer that declines or says it does not know is `incorrect`. The command refuses uncommitted changes, a server that does not answer and a server that serves another model. It logs one run named `answer-plain` to the MLflow experiment `landcover-answers` with the model, the server build, `top_k` 0, the tags `git_commit`, `eval_set`, `prompt_hash` and `judge_prompt_hash` (the first 12 hex digits of each prompt file's SHA-256), the metrics, and `results.json` with each answer, its verdict and reason, its tokens and its seconds.
+
+Model `gemma-4-12b-it-qat-q4_0`, llama-server build `b12359-b1b770d90`, answer prompt `e88db3af2e2d`, judge prompt `a11f648cb1f0`, evaluation set `5e2556f998a1`, commit `c472b1a1301f18cf228d868ced02d02570c5310f`:
+
+| Prompt | Answer correct | Tokens in | Tokens out | Shadow cost | Compute | p50 | p95 | Run ID |
+|---|---|---|---|---|---|---|---|---|
+| plain, no retrieval | 0.500 (16 of 32) | 3,822 | 1,346 | $0.0211 | 58.1 s | 1.76 s | 2.88 s | `e6d9e1d6e94b414f998e2c4862da704d` |
+
+Tokens, compute seconds, cost and latency count the 32 answer calls; latency is the client's wall clock per call. The 32 judge calls used 8,900 tokens in and 1,514 out, which are logged as `judge_tokens_in` and `judge_tokens_out` and are not in the cost. The run cost no money. The shadow cost prices the answer tokens at the Sonnet 5.5 rates of Section 6.7 of the design ($2 and $10 per million in and out), about $0.0007 per question. It is not what Bedrock would bill: Claude's tokenizer would count the same text differently from Gemma's.
+
+The first answer call skips the prompt cache, so `cold_calls` is 1 and the first question has 0 cached tokens. The other 31 calls reused 1 cached token each, not the roughly 70 tokens of the shared instruction. Gemma 4 uses sliding-window attention in part of its layers, and llama.cpp by default keeps only the window for those layers, so the cache cannot be rolled back to a prefix that two prompts share: everything after the first token is evaluated again, while an identical prompt is reused whole (960 prompt tokens, 955 cached, 1.0 s instead of about 4 s). The server log names no reason; it prints only the slot selection. Measured on this build with the command of `make llm-server` and again with `--swa-full` added, which makes the server log "using full-size SWA cache": the plain prompt went from 1 to 86 cached of 102 to 104 tokens and from 0.47 s to 0.14 to 0.24 s of prompt evaluation, and a prompt with five passages (780 to 1,103 tokens) from 1 to 84 to 91 cached tokens and from 2.9 to 3.9 s to 2.4 to 3.5 s, about 0.4 s per call, for 61 MB more memory (3,867 against 3,806 MB). `make llm-server` keeps its flags, so all rows of both Lab 3 answer tables come from one server configuration. In the plain run and the runs at top-k 5 and 10 every later call reused 1 cached token (one call at top-k 5 reused 427), so these calls evaluate their whole prompt and `cold_calls` 1 understates how cold they are; in the run at top-k 3, whose prompts are the shortest with passages, the 31 later calls reused 162 to 180 tokens. A server that reports no cached tokens leaves `cold_calls` out of the run instead of counting its calls as cold. The first call still sends `cache_prompt: false`, which keeps one cold prompt per run whatever the server's flags. `--swa-full` is the first latency lever for Lab 4 (Section 6.3 of the design). Every answer ended with `finish_reason` `stop`. The request sets `reasoning_effort` to `none`: without it, Gemma 4 spent the whole output limit on reasoning text and returned no answer.
+
+The model answered 2 of the 6 `export-contract` questions correctly, which shows that it does not know this project's export package: 7 of 8 on the QGIS page, 1 of 8 on the OpenEarthMap paper, 2 of 6 on FLAIR-HUB and 4 of 4 on the NAIP dictionary. The QGIS page and the NAIP dictionary hold what the model already knows; the gain from retrieval is to be sought in the other three documents.
+
+Measured with the same build and flags during the earlier runs on set `d06b7a39c631`: with the server freshly started and after one run, its physical footprint (`footprint $(pgrep -x llama-server)`) was 3,012 MB, plus 6,666 MB of clean memory-mapped pages of the model file. The server keeps a prompt cache in host memory of up to 8,192 MiB by default (`--cache-ram`), so the footprint grows with use: after several hundred calls in one process it was 9,179 MB.
+
+This row replaces run `8fe988ff4fa94f2d956a189fb9015b8d` (0.469, 15 of 32) on set `d06b7a39c631` with judge prompt `5b291def62c3`. After the review of Lab 3 the set was revised a second time (see [Lab 3: retrieval evaluation](#lab-3-retrieval-evaluation)), and the judge prompt gained a third rule: an answer that states the key fact but adds a false statement about what the question asks is `incorrect`. The baseline's 32 answers are the same as before except q25 and q26, whose questions changed; the extra question judged correct is q25 (see the check below). Run `8fe988ff4fa94f2d956a189fb9015b8d` itself replaced run `736634076b744485a8c19f690101c03c` (0.312, 10 of 32) on the first evaluation set `0174445a4974`. That run showed questions that did not say what they asked about and reference answers holding several facts, which the judge read as all required. The set was revised once: each question describes its subject by its properties, still without a document's name, and each reference answer is one sentence with the direct answer. The judge prompt gained two rules: the key fact is the direct answer to the question, and another name for the same setting counts. Judging these answers with the earlier judge prompt in an unlogged check gave the same 15 of 32, so the rise comes from the revised set.
+
+The judge was checked against labels on the answers of run `e6d9e1d6e94b414f998e2c4862da704d`, in [eval/judge-check.toml](eval/judge-check.toml). Claude (`claude-opus-5-5`) labelled each answer `correct` or `incorrect` by the rubric of `prompts/judge.md` from the question, the reference answer and the answer, before reading any verdict of this run; it had seen the run's printed answer metric and the reviewed labels of the earlier baseline, whose answers are the same except q25 and q26. A script then copied the verdicts in. The author reviewed every label.
+
+| | Label `correct` | Label `incorrect` |
+|---|---|---|
+| Judge `correct` | 15 | 1 |
+| Judge `incorrect` | 1 | 15 |
+
+The judge agrees with the labels on 30 of 32 answers; the rule set before the check required 29. The labels count 16 correct answers, the same as the judge, but not the same ones. q02 says 255 is "No Data", which the label accepts as the invalid pixels of the reference and the judge does not. q25 says that the codes for clear cuts and mixed areas are left out, which only repeats the examples of the question without the codes; the judge accepts it. The check on the earlier baseline agreed on 31 of 32, and the first run's check on 27 of 32, which led to the first revision of the set. Half of the answers are wrong, most of them "I do not know", which any judge rejects easily, so the table says more about rejecting than accepting; the check is repeated on a retrieval-augmented run in [Lab 3: retrieval-augmented answers](#lab-3-retrieval-augmented-answers).
+
+## Lab 3: retrieval-augmented answers
+
+The same evaluation set is answered from retrieved passages at three values of top-k. With the stack and the server up, a current index (`make retrieval-index`) and a clean working tree:
+
+```sh
+make answer-eval TOP_K=3
+make answer-eval TOP_K=5
+make answer-eval TOP_K=10
+```
+
+For each question the command retrieves the top-k chunks through the retriever of `make retrieval-eval` and fills [prompts/rag.md](prompts/rag.md) with them, numbered in order of distance, each headed by its document and section. The prompt tells the model to answer from a passage when one states the answer and to prefer it to its own memory, and, when none does, to answer from its own knowledge only if it is confident and otherwise to say that it does not know. A passage about a public dataset or tool does not describe this service's export package, and the prompt says so. Every answer ends with `Sources: [n]`, the passages that state it, or `Sources: none`, which is how an answer reports that no retrieved passage supports it (Sections 5.1 and 6.8 of the design). The judge, the model, the temperature and the output limit are those of the baseline.
+
+The run needs the `rag` dependency group, which the target adds when `TOP_K` is given; `make answer-eval` without it stays the plain baseline. Besides the checks of the baseline, the command refuses an index that was not built from the committed corpus and `retrieval.toml`, and names `make retrieval-index`. It logs one run named `answer-rag-k<n>` to the MLflow experiment `landcover-answers`, beside the baseline, with `top_k`, the four retrieval settings, the tag `index_version` and the hash of `prompts/rag.md` as `prompt_hash`. Hit rate and MRR are computed from the passages each answer was given, by the definition of `make retrieval-eval`, so one run is one row of the table below. Latency per question is retrieval plus the answer call; `retrieval_s` sums the retrieval seconds, and `compute_s` stays the answer calls only. `cited_answers` counts the answers that name at least one passage between 1 and k. `results.json` adds to the baseline's fields each question's first-hit rank, the retrieved chunk identifiers, the passage numbers the answer names and its retrieval seconds.
+
+```
+run 7fdebd8f: rag top_k 5, 32 questions, correct 0.656, hit rate 0.656, MRR 0.450, tokens 35956 in / 1455 out, p50 6.9 s, p95 9.1 s, shadow cost $0.0865 (prompt 4be4e95ed4e7, judge a11f648cb1f0, index 5570e99ba60e, questions 5e2556f998a1)
+```
+
+Model `gemma-4-12b-it-qat-q4_0`, llama-server build `b12359-b1b770d90`, plain prompt `e88db3af2e2d`, retrieval-augmented prompt `4be4e95ed4e7`, judge prompt `a11f648cb1f0`, index `5570e99ba60e`, evaluation set `5e2556f998a1`; the plain row is the baseline above, and it and the runs at top-k 3 and 5 ran on commit `c472b1a1301f18cf228d868ced02d02570c5310f`, the run at top-k 10 on commit `feb483bb18ab2c7a5829a4fc1056380f3cd463cf`, which adds only the labels of the two judge checks:
+
+| top-k | Hit rate | MRR | Answer correct | Tokens in | Tokens out | Shadow cost | Compute | p50 | p95 | Run ID |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0, plain | – | – | 0.500 (16 of 32) | 3,822 | 1,346 | $0.0211 | 58.1 s | 1.76 s | 2.88 s | `e6d9e1d6e94b414f998e2c4862da704d` |
+| 3 | 0.531 | 0.422 | 0.469 (15 of 32) | 24,047 | 1,303 | $0.0611 | 111.0 s | 3.49 s | 4.56 s | `3163de3f58e54a45bf846d0f74b30c43` |
+| 5 | 0.656 | 0.450 | 0.656 (21 of 32) | 35,956 | 1,455 | $0.0865 | 218.2 s | 6.86 s | 9.11 s | `7fdebd8f4a974e50835fcf6d9dd6b3f1` |
+| 10 | 0.844 | 0.473 | 0.781 (25 of 32) | 65,900 | 1,564 | $0.1474 | 336.5 s | 10.72 s | 12.95 s | `af9dc5b71a6e4ba7a6a598ef8f4636b9` |
+
+All four rows use one server build, question set and judge prompt. Hit rate and MRR equal the retrieval runs of the same k above, so the passages each answer was given are those `make retrieval-eval` scores. Tokens, compute and cost count the 32 answer calls; p50 and p95 add each question's retrieval, which took 0.88, 1.09 and 1.91 s over all 32 questions at k = 3, 5 and 10. The runs cost no money. Every answer ended with `finish_reason` `stop`, and every passage number an answer names lies between 1 and k.
+
+The four rows replace runs `8fe988ff4fa94f2d956a189fb9015b8d`, `1d13c9db9d0c46b29ef62243f770290d`, `1591a97b45fc4e6c910919598a964051` and `01551e9c8bdf43fc956a149c57f773c3` (15, 15, 19 and 25 of 32) on set `d06b7a39c631`, index `56be0057b30e` and judge prompt `5b291def62c3`, revised after the review of Lab 3 as described above. Those runs at top-k 3, 5 and 10 had in turn replaced runs `9ef2c97fca7f4aba8805f9a624da1fb1`, `032c60ed38194c27b0acc95b187ca55b` and `fe3d49fe10d548899b332338dbbd361f`, which read a citation written as `[3, 9]` as no citation. The first run at top-k 10 on the revised set, `31c7400e856a49a8a85baaf4bb802cc2`, gave the same 32 answers, verdicts and tokens as the row above; it was repeated because the Mac was swapping during it, and three of its calls took 25 to 76 s, which put its p95 at 27.70 s. The repeat ran after restarting the server, which frees its prompt cache.
+
+Correct answers per document (questions per document in brackets):
+
+| top-k | `export-contract` (6) | QGIS page (8) | OpenEarthMap paper (8) | FLAIR-HUB (6) | NAIP dictionary (4) |
+|---|---|---|---|---|---|
+| 0, plain | 2 | 7 | 1 | 2 | 4 |
+| 3 | 4 | 4 | 4 | 2 | 1 |
+| 5 | 6 | 6 | 6 | 2 | 1 |
+| 10 | 6 | 6 | 7 | 4 | 2 |
+
+Retrieval hit against answer verdict, per question:
+
+| top-k | Hit, correct | Hit, incorrect | Miss, correct | Miss, incorrect |
+|---|---|---|---|---|
+| 3 | 15 | 2 | 0 | 15 |
+| 5 | 20 | 1 | 1 | 10 |
+| 10 | 24 | 3 | 1 | 4 |
+
+An answer names at least one retrieved passage in 23, 23 and 27 of 32 answers at k = 3, 5 and 10. No answer that names no passage was judged correct: given passages that do not state the answer, the model says it does not know rather than answer from its own knowledge, although the prompt allows it. This is why retrieval costs answers the plain prompt had right, most of them on the QGIS page and the NAIP dictionary, which the model knows: 9 at k = 3, 6 at k = 5 and 4 at k = 10 (q13, q25, q30 and q31). The one correct answer after a miss, q08 at k = 5 and 10, uses the transparent-pixel list of the QGIS page, which its reference answer now accepts but its source does not cite, so Section 5.4 does not count that passage as relevant; adding it as a source changes the set and is left to the next revision. `export-contract` is answered fully from k = 5, and FLAIR-HUB gains most from k = 10.
+
+The judge was checked again on the answers of run `af9dc5b71a6e4ba7a6a598ef8f4636b9` at top-k 10, the run with the most answers the judge should accept, in [eval/judge-check-rag.toml](eval/judge-check-rag.toml). Claude (`claude-opus-5-5`) labelled each answer `correct` or `incorrect` by the rubric of `prompts/judge.md` from the question, the reference answer and the answer, ignoring the line `Sources:`. The labels were written before any per-question verdict of a run on this set was read; Claude had seen the answer metric each run prints and the reviewed labels of the earlier run at top-k 10, whose answers are the same except q25 and q26. A script then copied the verdicts in. The author reviewed every label.
+
+| | Label `correct` | Label `incorrect` |
+|---|---|---|
+| Judge `correct` | 24 | 1 |
+| Judge `incorrect` | 0 | 7 |
+
+The judge agrees with the labels on 31 of 32 answers, above the 29 required. The disagreement is q03: the answer names the right class, developed space, and then says that the OpenEarthMap labels count parking lots as road, while the paper counts only the lane between parking lots as road. The new rule of the judge prompt asks for `incorrect`, but the judge sees only the reference answer, which does not mention the lane, and accepts it; the earlier check had labelled the same answer `correct` too. By the labels the run has 24 correct answers, not 25. q08, which gives the transparent-pixel list instead of a no-data value, is now accepted by the revised reference, and q28 gives the 19 classes of the revised reference. The 7 rejected answers are one wrong value (q13), q25, which says the passages do not name the codes, and five "I do not know" answers.
+
+**Choice of top-k.** The rule, fixed before the runs, takes the smallest of 3, 5 and 10 whose answer metric is no more than two questions below the best of the three. The best is 25 of 32 at k = 10; k = 5 has 21 and k = 3 has 15, four and ten below. By the labels of the check the best would be 24, and k = 5 would still be three below. The chosen top-k stays 10, the value of `top_k` in [retrieval.toml](retrieval.toml) and the default of `make retrieval-eval`; the index version does not depend on top-k. The price is latency: p50 10.7 s against 6.9 s at k = 5, because each question sends about 2,060 prompt tokens instead of 1,120.
+
+Configuration for Lab 4:
+
+| Item | Value |
+|---|---|
+| Index version | `5570e99ba60e` |
+| top-k | 10 |
+| Answer prompt | `prompts/rag.md`, `4be4e95ed4e7` |
+| Judge prompt | `prompts/judge.md`, `a11f648cb1f0` |
+| Model | `gemma-4-12b-it-qat-q4_0`, llama-server build `b12359-b1b770d90` |
+| Evaluation set | `5e2556f998a1` |
+| Run | `af9dc5b71a6e4ba7a6a598ef8f4636b9` |
+
+**Memory.** Measured after the earlier run at k = 10 (`01551e9c8bdf43fc956a149c57f773c3`, the same server build and flags), with the Compose stack and the server up since before the runs:
+
+| What | Command | Value |
+|---|---|---|
+| Text model server | `footprint $(pgrep -x llama-server)` | 8,638 MB physical footprint (peak 11 GB), plus 6,014 MB of clean memory-mapped pages of the model file |
+| Compose stack | `docker stats --no-stream` | 3.69 GiB: Airflow 1.29 GiB, MLflow 2.19 GiB, silo 113 MiB, PostgreSQL 99 MiB |
+| Answer command at k = 10 | `/usr/bin/time -l make answer-eval TOP_K=10` | 999 MiB maximum resident set size: the embedding model, the client and MLflow |
+
+Most of the server's footprint is its prompt cache in host memory, which grows with use up to the default 8,192 MiB of `--cache-ram`; the clean pages of the model file can be dropped by macOS under pressure and read again. Without the clean pages the three take about 13 GiB of the Mac's 24 GiB; Minikube comes in Lab 4 and is measured there.

@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="648" viewBox="0 0 1000 648" role="img" aria-labelledby="title desc">
+  <title id="title">Lab 2 data layers</title>
+  <desc id="desc">The pinned FLAIR-HUB sample becomes the raw GeoTIFF tiles in data/raw, which DVC keeps in pgsty/silo with a directory checksum. Training reads the RGB tiles from data/raw. Airflow validates and transforms the tiles into PostgreSQL dwh.tiles, build_features writes features.tile_features with a feature_version, and the features feed quality_check and the monitoring reference. A user&#x27;s RGB upload has its serving inputs computed from the image.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#334155"/></marker>
+  </defs>
+  <style>
+    text { font: 15px Helvetica, Arial, sans-serif; fill: #26354a; }
+    .name { font-size: 17px; font-weight: bold; fill: #162e53; }
+    g rect { fill: #eef4ff; stroke: #335582; stroke-width: 1.5; }
+    .flow { fill: none; stroke: #334155; stroke-width: 2; marker-end: url(#arrow); }
+    .next { stroke-dasharray: 6 5; }
+    .label { fill: #244b75; }
+    .gate { fill: #92400e; font-weight: bold; }
+  </style>
+  <rect width="1000" height="648" fill="white"/>
+  <g transform="translate(371 16)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">Training source</text>
+    <text x="14" y="47">Pinned FLAIR-HUB sample</text>
+  </g>
+
+  <g transform="translate(24 150)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">Training</text>
+    <text x="14" y="47">Reads the RGB tiles</text>
+  </g>
+
+  <g transform="translate(371 150)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">data/raw</text>
+    <text x="14" y="47">Raw GeoTIFF tiles</text>
+  </g>
+
+  <g transform="translate(718 150)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">DVC remote</text>
+    <text x="14" y="47">pgsty/silo, with a directory</text>
+    <text x="14" y="67">checksum of data/raw</text>
+  </g>
+
+  <g transform="translate(371 284)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">PostgreSQL</text>
+    <text x="14" y="47">dwh.tiles</text>
+  </g>
+
+  <g transform="translate(24 418)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">User RGB upload</text>
+    <text x="14" y="47">Through the prediction API</text>
+  </g>
+
+  <g transform="translate(371 418)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">Offline features</text>
+    <text x="14" y="47">features.tile_features</text>
+    <text x="14" y="67">with feature_version</text>
+  </g>
+
+  <g transform="translate(24 552)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">Serving inputs</text>
+    <text x="14" y="47">Computed from the image</text>
+  </g>
+
+  <g transform="translate(371 552)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">Quality gate</text>
+    <text x="14" y="47">quality_check and the</text>
+    <text x="14" y="67">monitoring reference</text>
+  </g>
+
+  <path class="flow" d="M500 97 V147"/>
+  <path class="flow" d="M631 180 H715"/>
+  <path class="flow" d="M717 200 H633"/>
+  <path class="flow" d="M370 190 H285"/>
+  <path class="flow" d="M500 231 V281"/>
+  <text class="label" x="514" y="262">validate and transform</text>
+  <path class="flow" d="M500 365 V415"/>
+  <text class="label" x="514" y="396">build_features</text>
+  <path class="flow" d="M500 499 V549"/>
+  <path class="flow" d="M153 499 V549"/>
+</svg>

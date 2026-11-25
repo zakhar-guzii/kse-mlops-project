@@ -49,14 +49,23 @@ def verify_data(root, expected):
                          f"{status.stdout}{status.stderr}")
 
 
-def identity():
-    """(commit, data version), or exit naming why the run would not be reproducible."""
+def clean_head():
+    """The commit HEAD names, read once before any work; refuses a tree with uncommitted changes."""
     dirty = git("status", "--porcelain")
     if dirty:
-        raise SystemExit(f"uncommitted changes; commit them first:\n{dirty}")
+        raise RuntimeError(f"uncommitted changes; commit them first:\n{dirty}")
+    return git("rev-parse", "HEAD")
+
+
+def identity():
+    """(commit, data version), or exit naming why the run would not be reproducible."""
+    try:
+        commit = clean_head()
+    except RuntimeError as err:
+        raise SystemExit(str(err)) from None
     data = data_version(ROOT / "data" / "raw.dvc")
     verify_data(ROOT, data)
-    return git("rev-parse", "HEAD"), data
+    return commit, data
 
 
 def sha256(path):

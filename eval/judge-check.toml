@@ -1,0 +1,199 @@
+# Check of the LLM judge on the plain baseline (docs/design.md 5.4). Claude (claude-opus-5-5) labelled each
+# answer of the run below by the rubric of prompts/judge.md from the question, the reference answer and the
+# answer, before any per-question verdict of this run was read; Claude had seen the run's printed answer metric
+# and the reviewed labels of the earlier baseline, whose answers are the same except q25 and q26.
+# The judge's verdicts were copied in afterwards by script; the author reviewed every row.
+
+run_id = "e6d9e1d6e94b414f998e2c4862da704d"
+
+[[answers]]
+id = "q01"
+answer = "I do not know the specific number because the class mapping depends on the specific land-cover segmentation model or service being used. Please provide the documentation or the class legend for the specific export package you are referencing."
+judge = "incorrect"
+label = "incorrect"
+
+[[answers]]
+id = "q02"
+answer = "A cell value of 255 in the mask typically represents \"No Data\" or an area outside the study extent. Please check the specific metadata or class legend provided with your export package to confirm the exact definition for your dataset."
+judge = "incorrect"
+label = "correct"
+
+[[answers]]
+id = "q03"
+answer = "I do not know the specific class mapping for this export package without seeing the metadata or the class legend. Please provide the class list or the documentation for the specific land-cover segmentation model you are using."
+judge = "incorrect"
+label = "incorrect"
+
+[[answers]]
+id = "q04"
+answer = "I do not know the specific retention period for your service as it depends on the platform's configuration. Please check the service's terms of use or documentation for the specific timeframe."
+judge = "incorrect"
+label = "incorrect"
+
+[[answers]]
+id = "q05"
+answer = "Yes, the georeferenced mask maintains the same spatial extent and coordinate reference system (CRS) as the uploaded aerial imagery. This ensures that the class masks align perfectly with the original source data for downstream analysis."
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q06"
+answer = "No, you do not receive any part of the outputs if a job breaks partway. The service is designed to only provide the final files once the entire processing task is successfully completed."
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q07"
+answer = "In QGIS, you should use the **\"Paletted\"** (or \"Unique values\") symbology mode. This allows you to assign a specific, fixed color to each unique class code in your single-band mask."
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q08"
+answer = "To make the 255 pixels see-through, you should use the \"Transparency\" or \"Layer Properties\" tool to set the alpha value of the specific class value 255 to 100%. Alternatively, you can use a \"Band Math\" or \"Raster Calculator\" expression to reclassify the mask so that 255 becomes a \"NoData\" value."
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q09"
+answer = "You should change the **Symbology** or **Renderer** setting from \"Nominal\" to \"Continuous\" or \"Smooth.\" Alternatively, you can adjust the **Transparency** or use a **Blur** effect in the layer properties to soften the edges."
+judge = "incorrect"
+label = "incorrect"
+
+[[answers]]
+id = "q10"
+answer = "You should build a **Pyramid** (also known as an overviews) for your aerial imagery. This creates a multi-resolution image pyramid that allows the GIS software to display lower-resolution versions of the data while you are zoomed out."
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q11"
+answer = "To choose which bands appear as red, green, and blue, you must modify the \"Band Combination\" or \"Color Interpretation\" settings in your software's layer properties. For example, setting the combination to 4, 3, 2 will display the fourth band as red, the third as green, and the second as blue. The specific names of these settings vary depending on whether you are using QGIS or ArcGIS Pro."
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q12"
+answer = "The **Percent Clip** stretch ignores outliers by removing a specified percentage of the highest and lowest values. By default, it keeps the range between the **2nd and 98th percentiles**."
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q13"
+answer = "Yes, you can assign the correct coordinate system by defining the \"Projected Coordinate System\" or \"Spatial Reference\" in the dataset's properties. This tells the software how to interpret the existing coordinates without altering the underlying pixel values."
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q14"
+answer = "Yes, you can attach class names to pixel values by creating a \"Value Map\" or \"Attribute Table\" in software like QGIS. This is typically done by joining a CSV or using a \"Reclassify\" tool to map specific integer values to descriptive labels."
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q15"
+answer = "I do not know the specific mapping convention for private swimming pools in that benchmark. Please provide the name of the specific dataset or the documentation for the export package."
+judge = "incorrect"
+label = "incorrect"
+
+[[answers]]
+id = "q16"
+answer = "I do not know the specific classification details for lawns and bushes in public green spaces within that benchmark. Please provide the documentation or the specific dataset name for further clarification."
+judge = "incorrect"
+label = "incorrect"
+
+[[answers]]
+id = "q17"
+answer = "I do not know the specific classification rule for packed dirt in that benchmark. Please provide the documentation or the specific dataset name for a definitive answer."
+judge = "incorrect"
+label = "incorrect"
+
+[[answers]]
+id = "q18"
+answer = "I do not know the specific resolution details of the source photos used for the benchmark. Please provide the documentation or the specific name of the land-cover segmentation package for a more precise answer."
+judge = "incorrect"
+label = "incorrect"
+
+[[answers]]
+id = "q19"
+answer = "I do not know the specific percentage or frequency of agreement between human annotators for the land-cover benchmark. Please provide the specific dataset name or documentation if you would like me to look for that detail."
+judge = "incorrect"
+label = "incorrect"
+
+[[answers]]
+id = "q20"
+answer = "I do not know the specific number of images used for model fitting, tuning, and final evaluation. Please provide the documentation or the specific dataset name for further clarification."
+judge = "incorrect"
+label = "incorrect"
+
+[[answers]]
+id = "q21"
+answer = "The discrepancy occurs because different land-cover models use different classification schemes, such as distinguishing between \"impervious surfaces\" and \"bare soil\" or \"disturbed land.\" Additionally, variations in the training data, spectral resolution, and the specific algorithms used to define \"construction\" versus \"natural\" ground can lead to different results."
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q22"
+answer = "I do not know the specific class name as it depends on the specific land-cover segmentation export package you are referring to. Please provide the name of the dataset or the specific benchmark you are using."
+judge = "incorrect"
+label = "incorrect"
+
+[[answers]]
+id = "q23"
+answer = "I do not know the specific pixel size or spectral channels for the French national aerial imagery used in the model's training."
+judge = "incorrect"
+label = "incorrect"
+
+[[answers]]
+id = "q24"
+answer = "No, the brightness values of the French national aerial imagery cannot be treated as measured reflectance. These images are typically processed for visual display and do not contain the radiometric calibration required for physical reflectance values."
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q25"
+answer = "The label codes for \"clear cuts\" and \"mixed areas\" are left out of the training set. These classes are excluded to ensure the model focuses on more distinct and consistent land-cover types."
+judge = "correct"
+label = "incorrect"
+
+[[answers]]
+id = "q26"
+answer = "The training and validation patches were kept apart by a spatial buffer of 100 meters. This ensures that no overlapping information or spatial autocorrelation affects the evaluation of the model."
+judge = "incorrect"
+label = "incorrect"
+
+[[answers]]
+id = "q27"
+answer = "I do not know the specific ground area covered by a single 512 by 512 tile, as the spatial resolution of the imagery was not provided in the documentation."
+judge = "incorrect"
+label = "incorrect"
+
+[[answers]]
+id = "q28"
+answer = "The model was trained on a land-cover classification providing 11 distinct classes."
+judge = "incorrect"
+label = "incorrect"
+
+[[answers]]
+id = "q29"
+answer = "The imagery type code CNIR stands for Color Near-Infrared."
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q30"
+answer = "The date the photo was taken is typically represented by the **YYYYMMDD** string within the file name. This sequence identifies the specific year, month, and day of the aerial acquisition."
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q31"
+answer = "The US agricultural orthoimagery can be mapped in the NAD83 and WGS84 geodetic reference frames. These are the standard systems used for aligning high-resolution aerial imagery with public land-cover datasets."
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q32"
+answer = "You will receive the imagery in GeoTIFF format."
+judge = "correct"
+label = "correct"

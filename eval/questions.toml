@@ -1,0 +1,348 @@
+# Lab 3 retrieval evaluation set (docs/design.md 5.4). Drafted by Claude (claude-opus-5-5) from the
+# corpus and read by the author against each cited section. Revised after the first answer baseline
+# (openspec change add-lab3-llm-baseline, Decision 14): each question says by properties what it asks
+# about, and each reference answer is one sentence with the direct answer. A source is relevant when a
+# retrieved chunk has its doc_id and locator and contains its evidence quote (whitespace runs ignored).
+# Revised after the review of Lab 3: q08 accepts both documented ways, q25 and q26 ask about the dataset's
+# published experiments, q23 quotes the part of its evidence that one chunk holds whole, and q25 and q28
+# gain the other passages that state their answers.
+
+[[questions]]
+id = "q01"
+question = "Which number marks bare soil pixels in the mask this service exports?"
+answer = "Bare soil (the class bareland) is ID 0 in the exported mask."
+
+[[questions.sources]]
+doc_id = "export-contract"
+locator = "5.1 Problem statement"
+evidence = "| 0 | 1 | bareland |"
+
+[[questions]]
+id = "q02"
+question = "What does a cell value of 255 in the mask this service exports stand for?"
+answer = "255 is not a land-cover class but marks pixels ignored in training and invalid input pixels."
+
+[[questions.sources]]
+doc_id = "export-contract"
+locator = "5.1 Problem statement"
+evidence = "ID 255 marks pixels ignored in training and invalid input pixels in the output"
+
+[[questions]]
+id = "q03"
+question = "In the mask this service exports, are sidewalks and car parks given a class of their own, or are they merged with roads?"
+answer = "Neither: sidewalks and parking lots belong to developed space (ID 2), not to road."
+
+[[questions.sources]]
+doc_id = "export-contract"
+locator = "5.1 Problem statement"
+evidence = "Examples of `developed space` are sidewalks and parking lots."
+
+[[questions]]
+id = "q04"
+question = "After I upload an image to this service, how long can I still download its finished outputs?"
+answer = "Until 24 hours after the upload was accepted, a window that includes queue and processing time."
+
+[[questions.sources]]
+doc_id = "export-contract"
+locator = "6.8 Integration points"
+evidence = "available until `accepted_at` + 24 h, including queue and processing time"
+
+[[questions]]
+id = "q05"
+question = "Does the georeferenced mask this service returns keep the size and coordinate system of the uploaded picture?"
+answer = "Yes, the GeoTIFF mask keeps the source dimensions, CRS and affine transform."
+
+[[questions.sources]]
+doc_id = "export-contract"
+locator = "6.8 Integration points"
+evidence = "The GeoTIFF mask preserves the source dimensions, CRS and affine transform."
+
+[[questions]]
+id = "q06"
+question = "If a job of this service breaks partway, do I receive any part of the outputs?"
+answer = "No, a failed job returns its reason and no partial package."
+
+[[questions.sources]]
+doc_id = "export-contract"
+locator = "6.8 Integration points"
+evidence = "A failed job returns its reason and no partial package"
+
+[[questions]]
+id = "q07"
+question = "In my free desktop GIS, which way of drawing a single-band classification gives each class code its own fixed colour?"
+answer = "The renderer that assigns a colour to each unique raster value (Paletted/Unique values)."
+
+[[questions.sources]]
+doc_id = "qgis-raster"
+locator = "13.1. Raster Properties Dialog > 13.1.3. Symbology Properties > 13.1.3.1. Band rendering > Paletted/Unique values"
+evidence = "assigning a color to each unique raster value"
+
+[[questions]]
+id = "q08"
+question = "In my free desktop GIS, how can I make the 255 pixels of the mask see-through so that the basemap shows underneath?"
+answer = "In the layer's transparency settings, declare 255 as an additional no-data value or add it to the list of transparent pixels at 100 percent transparency."
+
+[[questions.sources]]
+doc_id = "qgis-raster"
+locator = "13.1. Raster Properties Dialog > 13.1.4. Transparency Properties"
+evidence = "you can enter a raster value that should be treated as an Additional no data value"
+
+[[questions]]
+id = "q09"
+question = "In my free desktop GIS, the mask looks blocky when I zoom in close. Which display setting makes it look smoother?"
+answer = "Bilinear or Cubic resampling instead of Nearest neighbour, which gives the blocky look."
+
+[[questions.sources]]
+doc_id = "qgis-raster"
+locator = "13.1. Raster Properties Dialog > 13.1.3. Symbology Properties > 13.1.3.3. Resampling"
+evidence = "When applying the ‘Nearest neighbour’ method, the map can get a pixelated structure when zooming in."
+
+[[questions]]
+id = "q10"
+question = "In my free desktop GIS, panning around a very large, detailed image is slow. What can I build to speed up the display?"
+answer = "Pyramids, which are lower-resolution copies of the data used at coarser zoom levels."
+
+[[questions.sources]]
+doc_id = "qgis-raster"
+locator = "13.1. Raster Properties Dialog > 13.1.9. Pyramids Properties"
+evidence = "By creating lower resolution copies of the data (pyramids),"
+
+[[questions]]
+id = "q11"
+question = "In my free desktop GIS, with a four-band image, how do I choose which bands appear as red, green and blue on screen?"
+answer = "Use the renderer that assigns three selected bands to the red, green and blue components (Multiband color)."
+
+[[questions.sources]]
+doc_id = "qgis-raster"
+locator = "13.1. Raster Properties Dialog > 13.1.3. Symbology Properties > 13.1.3.1. Band rendering > Multiband color"
+evidence = "three selected bands from the image will be used as the red, green or blue component"
+
+[[questions]]
+id = "q12"
+question = "In my free desktop GIS, a few very bright pixels wash out the contrast of my image. Which contrast stretch ignores such outliers, and which range does it keep by default?"
+answer = "The stretch that cuts the cumulative histogram (Cumulative count cut) keeps the values between 2% and 98% by default."
+
+[[questions.sources]]
+doc_id = "qgis-raster"
+locator = "13.1. Raster Properties Dialog > 13.1.3. Symbology Properties > 13.1.3.1. Band rendering > Setting the min and max values"
+evidence = "The standard range of values is `2%` to `98%`"
+
+[[questions]]
+id = "q13"
+question = "In my free desktop GIS, my image shows up in the wrong place on the map. Can I assign it the correct coordinate system without reprojecting the data?"
+answer = "Yes, a wrong or missing coordinate reference system of the layer can be reassigned without reprojecting the data."
+
+[[questions.sources]]
+doc_id = "qgis-raster"
+locator = "13.1. Raster Properties Dialog > 13.1.2. Source Properties"
+evidence = "Use this process only if the layer CRS is a wrong or not specified."
+
+[[questions]]
+id = "q14"
+question = "In my free desktop GIS, can I attach class names to the pixel values of a classified raster in a table?"
+answer = "Yes, a raster attribute table links raster values to descriptive attributes such as class names."
+
+[[questions.sources]]
+doc_id = "qgis-raster"
+locator = "13.1. Raster Properties Dialog > 13.1.15. Attribute Tables"
+evidence = "links raster values (or value ranges) to descriptive attributes such as class names"
+
+[[questions]]
+id = "q15"
+question = "In the aerial land-cover benchmark behind the exported classes, is a private swimming pool mapped as water or as built-up area?"
+answer = "As water, because the water class includes swimming pools."
+
+[[questions.sources]]
+doc_id = "oem-paper"
+locator = "OpenEarthMap: A Benchmark Dataset for Global High-Resolution Land Cover Mapping > S1 Land Cover Classes"
+evidence = "Water includes water bodies (e.g., rivers, streams, lakes, sea, ponds, dams) and swimming pools."
+
+[[questions]]
+id = "q16"
+question = "In the aerial land-cover benchmark behind the exported classes, how are lawns and bushes in public green spaces such as a golf club classified?"
+answer = "As rangeland, which includes grass and shrubs in parks and golf courses."
+
+[[questions.sources]]
+doc_id = "oem-paper"
+locator = "OpenEarthMap: A Benchmark Dataset for Global High-Resolution Land Cover Mapping > S1 Land Cover Classes"
+evidence = "as well as grass and shrubs in gardens, parks, and golf courses"
+
+[[questions]]
+id = "q17"
+question = "In the aerial land-cover benchmark behind the exported classes, is packed dirt in a yard counted as bare ground or as a paved, built-up surface?"
+answer = "As developed space, because compacted soil is labelled developed space rather than bareland."
+
+[[questions.sources]]
+doc_id = "oem-paper"
+locator = "OpenEarthMap: A Benchmark Dataset for Global High-Resolution Land Cover Mapping > S1 Land Cover Classes"
+evidence = "Compacted soil is also labeled as developed space."
+
+[[questions]]
+id = "q18"
+question = "When the aerial land-cover benchmark behind the exported classes was built, were source photos with pixels smaller than a quarter metre kept at their native resolution?"
+answer = "No, images finer than 0.25 m were resampled to 0.3 m or 0.5 m."
+
+[[questions.sources]]
+doc_id = "oem-paper"
+locator = "OpenEarthMap: A Benchmark Dataset for Global High-Resolution Land Cover Mapping > 2 The Dataset > 2.1 Source of Imagery"
+evidence = "we resampled the images to 0.3m or 0.5m"
+
+[[questions]]
+id = "q19"
+question = "In the aerial land-cover benchmark behind the exported classes, how often did two human annotators give a pixel the same class?"
+answer = "78% of the pixels received the same class when images were labelled twice by different people."
+
+[[questions.sources]]
+doc_id = "oem-paper"
+locator = "OpenEarthMap: A Benchmark Dataset for Global High-Resolution Land Cover Mapping > 2 The Dataset > 2.2 Classes, Annotations, and Data Split"
+evidence = "labeled as the same class in the two different annotations by different people is 78%"
+
+[[questions]]
+id = "q20"
+question = "How many images went into model fitting, tuning and final evaluation of the aerial land-cover benchmark behind the exported classes?"
+answer = "3000 images for training, 500 for validation and 1500 for testing."
+
+[[questions.sources]]
+doc_id = "oem-paper"
+locator = "OpenEarthMap: A Benchmark Dataset for Global High-Resolution Land Cover Mapping > 2 The Dataset > 2.2 Classes, Annotations, and Data Split"
+evidence = "which respectively yielded 3000, 500, and 1500 images"
+
+[[questions]]
+id = "q21"
+question = "Why can a construction site count as bare ground in one land-cover map and not in another?"
+answer = "Because the maps define their classes differently, so one counts a construction site as bare land and the other as developed space."
+
+[[questions.sources]]
+doc_id = "oem-paper"
+locator = "OpenEarthMap: A Benchmark Dataset for Global High-Resolution Land Cover Mapping > 6 Demonstration on Out-of-Sample Imagery"
+evidence = "The accuracy of bareland is low due to inconsistency in class definitions."
+
+[[questions]]
+id = "q22"
+question = "In the aerial land-cover benchmark behind the exported classes, which class is hardest for the model compared with human labellers?"
+answer = "Agriculture land, where the machine trails human annotation by 2.3%."
+
+[[questions.sources]]
+doc_id = "oem-paper"
+locator = "OpenEarthMap: A Benchmark Dataset for Global High-Resolution Land Cover Mapping > 3 Land Cover Semantic Segmentation > 3.4 Human Annotation vs Machine Prediction"
+evidence = "The challenging class for the machine is agriculture land"
+
+[[questions]]
+id = "q23"
+question = "What pixel size and which spectral channels does the French national aerial imagery the model was trained on have?"
+answer = "0.20 m pixels with red, green, blue and near-infrared channels."
+
+[[questions.sources]]
+doc_id = "flair-hub"
+locator = "FLAIR-HUB: Large-scale Multimodal Dataset for Land Cover and Crop Mapping > IV Dataset modalities > IV-A Mono-temporal and multi-temporal modalities"
+evidence = "0.20 m (R, G, B and NIR channels)"
+
+[[questions]]
+id = "q24"
+question = "Can the brightness values of the French national aerial imagery the model was trained on be treated as measured reflectance?"
+answer = "No, the radiometry is only equalised relatively and is not a physical measurement of reflectance."
+
+[[questions.sources]]
+doc_id = "flair-hub"
+locator = "FLAIR-HUB: Large-scale Multimodal Dataset for Land Cover and Crop Mapping > IV Dataset modalities > IV-A Mono-temporal and multi-temporal modalities"
+evidence = "cannot be considered as a physical measurement of channel reflectance"
+
+[[questions]]
+id = "q25"
+question = "In the published experiments on the French national aerial imagery dataset, which of its label codes, such as clear cuts or mixed areas, are left out of training?"
+answer = "Codes 15 to 18 (clear cut, ligneous, mixed and undefined) are excluded from training."
+
+[[questions.sources]]
+doc_id = "flair-hub"
+locator = "FLAIR-HUB: Large-scale Multimodal Dataset for Land Cover and Crop Mapping > Label configuration"
+evidence = "default_exceptions: 15: 0 16: 0 17: 0 18: 0"
+
+[[questions.sources]]
+doc_id = "flair-hub"
+locator = "FLAIR-HUB: Large-scale Multimodal Dataset for Land Cover and Crop Mapping > IV Dataset modalities > IV-A Mono-temporal and multi-temporal modalities"
+evidence = "Only the first 15 classes are used in the FLAIR-HUB experiments."
+
+[[questions.sources]]
+doc_id = "flair-hub"
+locator = "FLAIR-HUB: Large-scale Multimodal Dataset for Land Cover and Crop Mapping > IV Dataset modalities > IV-A Mono-temporal and multi-temporal modalities"
+evidence = "| Clear cut | 15 | ✗ |"
+
+[[questions]]
+id = "q26"
+question = "In the official split of the French national aerial imagery dataset that its published experiments use, how were training patches kept apart in space from validation patches?"
+answer = "By region of interest, so contiguous patches of one region all go to the same set."
+
+[[questions.sources]]
+doc_id = "flair-hub"
+locator = "FLAIR-HUB: Large-scale Multimodal Dataset for Land Cover and Crop Mapping > IV Dataset modalities > IV-B Official dataset partitions"
+evidence = "contiguous patches belonging to the same ROI all share the same usage"
+
+[[questions]]
+id = "q27"
+question = "What ground area does one 512 by 512 tile of the French national aerial imagery the model was trained on cover?"
+answer = "102.4 m by 102.4 m, since one pixel is 0.2 m."
+
+[[questions.sources]]
+doc_id = "flair-hub"
+locator = "FLAIR-HUB: Large-scale Multimodal Dataset for Land Cover and Crop Mapping > III Dataset global description and naming conventions"
+evidence = "they represent the same coverage on the ground : 102.4 m×102.4 m"
+
+[[questions]]
+id = "q28"
+question = "How many land-cover classes does the annotation of the French national aerial imagery the model was trained on provide?"
+answer = "19 land-cover classes (0 to 18), of which 4 are optional."
+
+[[questions.sources]]
+doc_id = "flair-hub"
+locator = "FLAIR-HUB: Large-scale Multimodal Dataset for Land Cover and Crop Mapping > Dataset overview"
+evidence = "15 land cover semantic classes (+ 4 optional ones)"
+
+[[questions.sources]]
+doc_id = "flair-hub"
+locator = "FLAIR-HUB: Large-scale Multimodal Dataset for Land Cover and Crop Mapping > IV Dataset modalities > IV-A Mono-temporal and multi-temporal modalities"
+evidence = "The land cover classification consists of 19 classes, ranging from 0 to 18."
+
+[[questions.sources]]
+doc_id = "flair-hub"
+locator = "FLAIR-HUB: Large-scale Multimodal Dataset for Land Cover and Crop Mapping > I Context"
+evidence = "a nomenclature of 19 land-cover classes"
+
+[[questions]]
+id = "q29"
+question = "In the US farm aerial photo catalogue, what does the imagery type code CNIR stand for?"
+answer = "CNIR stands for Color Near Infrared."
+
+[[questions.sources]]
+doc_id = "naip-dictionary"
+locator = "National Agriculture Imagery Program (NAIP) Data Dictionary > Sensor Type"
+evidence = "CNIR = Color Near Infrared (CNIR)"
+
+[[questions]]
+id = "q30"
+question = "In the file names of US agricultural aerial tiles, which part gives the date the photo was taken?"
+answer = "The first eight-digit date (YYYYMMDD) is the acquisition date."
+
+[[questions.sources]]
+doc_id = "naip-dictionary"
+locator = "National Agriculture Imagery Program (NAIP) Data Dictionary > Entity ID"
+evidence = "YYYYMMDD = Acquisition date (year, month, day)"
+
+[[questions]]
+id = "q31"
+question = "Which geodetic reference frames can the US agricultural orthoimagery be mapped in?"
+answer = "NAD83 (North American Datum 1983) or WGS84 (World Geodetic System 1984)."
+
+[[questions.sources]]
+doc_id = "naip-dictionary"
+locator = "National Agriculture Imagery Program (NAIP) Data Dictionary > Datum"
+evidence = "- NAD83 = North American Datum 1983 - WGS84 = World Geodetic System 1984"
+
+[[questions]]
+id = "q32"
+question = "If I download the US farm aerial imagery without the compressed option, which file format do I get?"
+answer = "Only GeoTIFF images."
+
+[[questions.sources]]
+doc_id = "naip-dictionary"
+locator = "National Agriculture Imagery Program (NAIP) Data Dictionary > JP2000 Available"
+evidence = "No = Results only return GeoTIFF images"

@@ -48,7 +48,7 @@ mIoU is the **optimization** metric: the score we try to improve. Export validit
 - A GeoTIFF with a valid CRS and affine transform also yields a GeoTIFF mask on the same grid; otherwise the mask uses the pixel grid. Coordinates are never invented.
 - Images of different sizes and aspect ratios, within the ceilings below, are processed in overlapping tiles and stitched back to the source pixel grid.
 - The operator ingests a labelled batch, trains a candidate from the approved model, compares them, approves or blocks the candidate, and rolls back to an earlier approved version.
-- The GIS assistant answers questions about the export from the project documentation with cited sources, through the Lab 3 retriever and submits authorized images to the Lab 4 prediction service. Only these two tools are allowed, with four attempts per task across retries and resumes. Workers decode, segment, check the grid and export the package.
+- The GIS assistant answers questions about the export from the project documentation with cited sources, through the Lab 3 retriever and submits authorized images to the Lab 4 prediction service. It takes questions in English and answers in English. Only these two tools are allowed, with four attempts per task across retries and resumes. Workers decode, segment, check the grid and export the package.
 
 **Non-functional requirements:**
 
@@ -88,6 +88,8 @@ Examples of `developed space` are sidewalks and parking lots. OEM labels the lan
 
 **Rejected framing:** building-only (binary) segmentation. It is simpler and well studied, but the GIS layer must also separate roads, vegetation, water and agricultural land.
 
+**LLM component.** The LLM has an auxiliary job over a document corpus; it does not make the mask. The GIS assistant answers questions about the export package, such as what a class ID or the value 255 means, which bands and resolution an input has, or how to display the mask in QGIS, from the documents, and cites the passage it used. The corpus has five public documents: the OpenEarthMap and FLAIR-HUB papers from arXiv, with the FLAIR-HUB label configuration from GitHub; the USGS NAIP data dictionary; the QGIS 3.44 raster properties page; and `export-contract`, which is this section and Section 6.8. The four external documents are cleaned Markdown copies in `corpus/` of the repository; `export-contract` is read from this file when the index is built (Section 5.2). The first build, index version `25fcac866b12`, had 572 chunks.
+
 ## 5.2 Data
 
 **Image resolution.** Ground sampling distance (GSD) is the size of the ground area represented by one image pixel. A GSD of 0.25–0.5 m means that one pixel covers roughly 25–50 cm on each side; it does not describe height.
@@ -118,7 +120,7 @@ We also considered NAIP images for Utah back to 2003 (with coarser resolution be
 1. **Time axis.** The operator downloads one FLAIR-HUB domain per batch into the training pipeline, in order of the actual acquisition years. OEM is used for initial training and has no usable time axis.
 2. **History and holdout.** The 2017–2020 batches provide four successive updates; the 2021 dataset is used only to choose settings and check candidates. The 2022 dataset is reserved for a single final evaluation (table above).
 3. **Labels and delay.** When the operator downloads a FLAIR-HUB batch into the pipeline, its reference masks are already available with the images, so there is no wait between image availability and mask availability for that run. This zero delay does not apply to user uploads, which have no reference masks.
-4. **Corpus.** The GIS assistant uses a retrieval corpus of saved copies of the OEM and FLAIR-HUB papers, the NAIP dictionary, QGIS documentation and sections of this design. The exact sources are listed below.
+4. **Corpus.** The GIS assistant uses a retrieval corpus of five documents: saved copies of the OEM and FLAIR-HUB papers, the NAIP dictionary and the QGIS raster properties page, committed in `corpus/`, and two sections of this design. The exact sources are listed below.
 
 The FLAIR sequence changes both year and region, so its scores measure transfer to later images of other places. They do not measure change at one place or what a model available in 2017 could have achieved: OEM and the ImageNet encoder were published later. The zero label delay above describes access to an existing image-and-mask pair, not the time from image acquisition or the time needed to create a mask. A Lab 4 exercise may withhold one batch's labels as a declared simulation.
 
@@ -164,7 +166,7 @@ The product design adds a frozen manifest and a watermark for accepted batches. 
 | Jobs, users, monitoring statistics | PostgreSQL tables | PostgreSQL 16 | RDS | Migrations in Git |
 | Runs, metrics, model versions, alias | MLflow: metadata in PostgreSQL, files in object storage | MLflow | MLflow on EC2 with RDS and S3 | MLflow model versions |
 | Uploads and results | Original file; GeoTIFF, PNG, JSON | Temporary bucket | Temporary S3 bucket, no versioning | Not versioned; expire after 24 h (Section 6.5) |
-| Retrieval corpus | Saved document copies; chunks with pgvector embeddings | Object storage, PostgreSQL | S3, RDS | Copy SHA-256, `doc_version`, index version |
+| Retrieval corpus | Cleaned Markdown copies with a manifest; chunks with pgvector embeddings | Git (`corpus/`), PostgreSQL schema `retrieval` | S3, RDS | Copy SHA-256 in the manifest, `doc_version`, index version |
 
 Images and masks stay in raster formats. Converting them to CSV or Parquet would add an unnecessary step.
 
@@ -176,17 +178,17 @@ Git LFS only stores and fetches large files. DVC also gives a whole directory on
 
 **Retrieval corpus:**
 
-| `doc_id` | Document |
-|---|---|
-| `oem-paper` | [OpenEarthMap paper](https://arxiv.org/html/2210.10732): class definitions (S1), data and splits (2.2) |
-| `flair-hub` | [FLAIR-HUB paper](https://arxiv.org/html/2506.07080v1) and the pinned [label configuration](https://github.com/IGNF/FLAIR-HUB/blob/main/configs/train/config_supervision.yaml) |
-| `naip-dictionary` | [USGS NAIP data dictionary](https://www.usgs.gov/centers/eros/science/national-agriculture-imagery-program-naip-data-dictionary): dates, bands, resolution |
-| `qgis-raster` | [QGIS 3.44 raster properties](https://docs.qgis.org/3.44/en/docs/user_manual/working_with_raster/raster_properties.html) |
-| `export-contract` | Sections 5.1 and 6.8 of this document |
+| `doc_id` | Document | Copy |
+|---|---|---|
+| `oem-paper` | [OpenEarthMap paper](https://arxiv.org/html/2210.10732): class definitions (S1), data and splits (2.2) | `corpus/oem-paper.md` |
+| `flair-hub` | [FLAIR-HUB paper](https://arxiv.org/html/2506.07080v1) and the pinned [label configuration](https://github.com/IGNF/FLAIR-HUB/blob/a0c47d5ffcd4792b84eea213a68485c200065d43/configs/train/config_supervision.yaml) | `corpus/flair-hub.md` |
+| `naip-dictionary` | [USGS NAIP data dictionary](https://www.usgs.gov/centers/eros/science/national-agriculture-imagery-program-naip-data-dictionary): dates, bands, resolution | `corpus/naip-dictionary.md` |
+| `qgis-raster` | [QGIS 3.44 raster properties](https://docs.qgis.org/3.44/en/docs/user_manual/working_with_raster/raster_properties.html) | `corpus/qgis-raster.md` |
+| `export-contract` | Sections 5.1 and 6.8 of this document | None: read from this file when the index is built |
 
-For each saved copy of a document, we record its source URL, access date, SHA-256 and `doc_version`. For each chunk, we record `doc_id`, `doc_version` and a locator for the source section.
+A saved copy is cleaned Markdown: the source's headings and tables, without navigation, figures, acknowledgements or reference lists. The sources have no address that pins their bytes, so the copies are committed to Git, made once by hand and replaced only deliberately. [corpus/manifest.toml](../corpus/manifest.toml) records each copy's source URLs, access date and SHA-256; the hash is of the committed file, so it shows that a copy was not edited afterwards, not that it equals the source. Every document's `doc_version` is derived from its indexed text: the first 12 hexadecimal digits of its SHA-256. For each chunk, we record `doc_id`, `doc_version` and a locator, the heading path of the section it lies in.
 
-In Lab 3, one versioned retrieval configuration will select the corpus revision, chunking, embedding model and top-k for evaluation and serving. A planned `make retrieval-index` command will rebuild the index and print its document count. Version both the plain and retrieval-augmented prompts and log their hashes with the index and configuration in MLflow. Compare answers on at least 30 paraphrased questions with reference answers and expected source sections. At three or more top-k settings, report retrieval hit@k and mean reciprocal rank (MRR) and compare answer correctness against the plain-prompt baseline. Record resources or cost and p50/p95 latency over at least ten calls per configuration. Lab 4 will deploy the selected configuration unchanged.
+In Lab 3, one versioned retrieval configuration, [retrieval.toml](../retrieval.toml), holds `chunk_size`, `chunk_overlap`, `embedding_model`, `embedding_revision` and `top_k` for evaluation and serving; the corpus revision is the Git commit. `make retrieval-index` rebuilds the index from the committed corpus and prints its document and chunk counts and its index version. The plain answer prompt, the retrieval-augmented prompt and the judge prompt are files in [prompts/](../prompts/), each identified by the first 12 hex digits of its SHA-256. `make answer-eval` answers the evaluation set with the plain prompt through the text model of `[llm]` in `retrieval.toml`, judges each answer against its reference answer, and logs both prompt hashes with the model, tokens, shadow cost and p50/p95 latency to MLflow; Section 7.2 gives the baseline. `make answer-eval TOP_K=<n>` retrieves n passages per question, answers with [prompts/rag.md](../prompts/rag.md), judges the answers with the same judge prompt, and logs the hash of `rag.md` with the index version and the retrieval settings. The evaluation set [eval/questions.toml](../eval/questions.toml) holds 32 paraphrased English questions with reference answers and their source sections. `make retrieval-eval` reports retrieval hit@k and mean reciprocal rank (MRR) at top-k 3, 5 and 10 (Section 5.4), and Section 7.2 gives the results. The retrieval-augmented runs at top-k 3, 5 and 10 are compared with the plain-prompt baseline on the same questions, each recording tokens, shadow cost and p50/p95 latency over its 32 answer calls; the comparison chose `top_k` 10 (Section 5.4). Lab 4 will deploy the selected configuration unchanged.
 
 ## 5.3 Techniques
 
@@ -244,6 +246,13 @@ Serving accepts only 8-bit RGB. A future adapter will convert known 16-bit and o
 | [FT-UNetFormer / Swin-B](https://arxiv.org/abs/2109.08937) ([GeoSeg code](https://github.com/WangLibo1995/GeoSeg), [backbone weights](https://drive.google.com/drive/folders/1ELpFKONJZbXmwB5WCXG7w42eHtrXzyPn)) | 69.13 OEM mIoU, same benchmark | +0.93 points for about 4.7× the parameters; GPL-3.0 research code pinned to Python 3.8; backbone weights only, without stated terms |
 | [SatlasPretrain Aerial Swin-v2-Base](https://arxiv.org/abs/2211.15660) ([package](https://github.com/allenai/satlaspretrain_models), [`aerial_swinb_si.pth`](https://huggingface.co/allenai/satlas-pretrain/blob/main/aerial_swinb_si.pth)) | Pretrained on NAIP aerial imagery; includes a segmentation head | No OEM-8 result or checkpoint; larger backbone; ODC-BY weights; documented for 0.5–2 m imagery, coarser than FLAIR's 0.2 m |
 
+**LLM component (Lab 3).** The assistant's answer to a documentation question comes from Gemma 4 12B QAT Q4_0 (Section 6.2).
+
+- **Baseline.** The plain prompt [prompts/plain.md](../prompts/plain.md), zero-shot, with no retrieved passage: what the model knows by itself.
+- **Technique.** Retrieval-augmented generation. The question is embedded with multilingual-e5-small and the top-k section-bounded chunks (600 characters, overlap 100) are found by exact cosine search in pgvector (Section 6.2); [prompts/rag.md](../prompts/rag.md) puts the numbered passages, each headed by its document and section, before the question. Fine-tuning is not used (Section 7.1).
+- **Grounding rule.** The model answers from a passage that states the answer and prefers it to its own memory; when no passage does, it may answer from its own knowledge if it is confident and otherwise says that it does not know. Every answer ends with `Sources: [n]` or `Sources: none`, so an answer either cites a passage or reports that none supports it, as Sections 5.1 and 6.8 require. The prompt also says that a passage about a public dataset does not describe this service's export, because the OpenEarthMap paper numbers bareland 1 and the export numbers it 0. In the runs the model did not use the permission: no answer without a cited passage was correct (Section 5.4).
+- **At serving time** the model receives one user message: the instruction of `rag.md`, the 10 passages `retrieve` returns for the question at `top_k` 10 of `retrieval.toml`, and the question; temperature 0 and at most 256 output tokens, from the table `[llm]`. The service shows the cited passages with their `doc_id`, `doc_version` and locator.
+
 ## 5.4 Experimentation and validation
 
 A random split could place neighbouring tiles from the same scene in both training and evaluation. This would overstate accuracy. We therefore split data by region and, for FLAIR, by acquisition year.
@@ -271,6 +280,28 @@ A random split could place neighbouring tiles from the same scene in both traini
 - **Champion.** The forest and the U-Net are registered, and `champion` points at the one with the higher development mIoU. The majority-class rule is the floor and is not registered.
 - **Approval rules not exercised.** Steps 4 and 5 compare OEM-8 scores and per-class OEM losses, which need OEM, and the course has no sequential update; these rules stay the product description. Step 6 is not run in Lab 2.
 - **Reproduction.** `make reproduce VERSION=<n>` retrains a registered version from its commit, data version and logged parameters, including the encoder revision for U-Net. The forest and rule use a 0.01 development mIoU tolerance. U-Net uses CUDA with `GPU=L4` available for a Colab run. Section 7.2 records the measurements and tolerance.
+
+**Course experiment (Lab 3): retrieval.** The evaluation set [eval/questions.toml](../eval/questions.toml) has 32 English questions that a GIS user could ask: 6 on `export-contract`, 8 on the QGIS page, 8 on the OpenEarthMap paper, 6 on FLAIR-HUB and 4 on the NAIP dictionary. Claude drafted each question from one section of the corpus, without the document's name or the passage's wording, with a reference answer and a verbatim evidence quote of at most 100 characters; the author read every row against its section. The tests check that every cited section exists in the chunked corpus, that one of its chunks holds the quote, and that no question names its document or shares four consecutive words with its passage.
+
+- **Relevant chunk.** A retrieved chunk is relevant when its `doc_id` and locator are those of a source and its text contains that source's quote, whitespace runs ignored. A section alone would count any of the 74 chunks of the largest FLAIR-HUB section; a chunk number would break with the chunk size. A chunk that states the same fact elsewhere counts as a miss, so the measure is conservative.
+- **Metrics.** Hit rate at k is the share of questions with a relevant chunk among the first k retrieved. MRR at k is the mean over all questions of 1 / rank of the first relevant chunk among the first k, and 0 when there is none.
+- **Values.** `make retrieval-eval` runs at top-k 3, 5 and 10 (the value in `retrieval.toml`, chosen by the answer experiment below), one MLflow run each in the experiment `landcover-retrieval`, tagged with `git_commit`, `index_version` and `eval_set`, the hash of the question file. The search is exact, so the three runs are cuts of one ranking and cannot fall as k grows; the comparison shows what a larger k buys and does not choose k.
+- **Limit.** One question is 3.1 points of hit rate, so a difference of one or two questions decides nothing.
+
+**Course experiment (Lab 3): answers.** `make answer-eval` sends the 32 questions to Gemma 4 12B QAT Q4_0 (Section 6.2) with [prompts/plain.md](../prompts/plain.md), which holds no retrieved passage, and logs one run `answer-plain` to the MLflow experiment `landcover-answers` with the model, the server build, `top_k` 0, the hashes of both prompt files, `eval_set`, the answer metric, tokens in and out, compute seconds, a shadow cost at the Sonnet 5.5 rates of Section 6.7, p50 and p95 latency, and each answer with its verdict. The evaluation set was revised after the first run: questions describe their subject by its properties, and each reference answer is one sentence with the direct answer. It was revised again after the review of Lab 3: a question accepts every way the corpus documents, questions about a public dataset say that they ask about its published experiments, and a question may cite every passage that states its answer.
+
+- **Rubric.** Binary. An answer is `correct` when it states the key fact of the reference answer, the direct answer to the question, and does not contradict it; another name for the same setting counts. A different value, a missing key fact, a refusal or "I do not know" is `incorrect`, and so is the key fact with a false statement added about what the question asks. The answer metric is the share of `correct` answers.
+- **Judge.** The same model on the same server, with [prompts/judge.md](../prompts/judge.md), at temperature 0 and with the verdict constrained to the two values by a JSON schema. Its tokens are logged apart and are not in the cost.
+- **Check.** Claude (`claude-opus-5-5`) labelled the 32 answers of the baseline run by the same rubric before reading the run's verdicts, having seen the reviewed labels of the earlier baseline, whose answers differ only in q25 and q26; the author reviewed every label. The judge agreed on 30 of 32, above the 29 required before the check; the README gives the table.
+- **Limit.** Most baseline answers are wrong, many of them refusals, so the check says more about rejecting than about accepting an answer; it was repeated on a retrieval-augmented run (below).
+
+**Course experiment (Lab 3): retrieval-augmented answers.** `make answer-eval TOP_K=<n>` retrieves n passages per question through `retrieve`, numbers them in order of distance with their document and section, and answers with [prompts/rag.md](../prompts/rag.md): the model answers from a passage that states the answer, may otherwise answer from its own knowledge if it is confident, and ends every answer with `Sources: [n]` or `Sources: none`. The judge, the model and the evaluation set are those of the baseline. One run, `answer-rag-k<n>` in `landcover-answers`, logs the index version, the retrieval settings, hit rate and MRR of the passages the answers were given, the answer metric, tokens, shadow cost, latency as retrieval plus the answer call, and how many answers name a retrieved passage.
+
+- **Values.** Three runs at top-k 3, 5 and 10 with one server build, question set and judge prompt, beside the baseline; Section 7.2 gives the table. Hit rate and MRR equal those of `make retrieval-eval` at the same k. The answer metric is 15, 21 and 25 of 32, against 16 for the plain prompt.
+- **Rule.** Fixed before the runs: the smallest of 3, 5 and 10 whose answer metric is no more than two questions below the best of the three, because a difference of one or two questions decides nothing on 32 questions and each added passage adds prompt tokens and latency. The best is 25 at k = 10 and k = 5 is four below, so `top_k` is 10 in `retrieval.toml`.
+- **Second check of the judge.** Claude labelled the 32 answers of the run at k = 10 by the rubric before any per-question verdict of a run on this set was read; Claude had seen each run's printed answer metric and the reviewed labels of the earlier run, whose answers differ only in q25 and q26. The author reviewed every label. The judge agreed on 31 of 32, with 25 answers it accepts, so the check covers accepting as well as rejecting. The disagreement, q03, names the right class and adds a false statement about roads; the judge accepts it although its prompt calls such an answer incorrect, because it sees only the reference answer and not the source. By the labels the run has 24 correct answers, and the choice of k is the same.
+- **Grounding in practice.** No answer that names no passage was judged correct: given passages that do not state the answer, the model says it does not know rather than use its own knowledge. Retrieval therefore loses answers the plain prompt had right on the documents the model knows, 4 at k = 10.
+- **Limit.** 32 questions, one run per value of k, and one judge that is the answering model itself.
 
 ## 5.5 Human in the loop
 
@@ -300,40 +331,33 @@ Lifecycle: training run → registered candidate → `champion` alias → monito
 
 ### Lab 2 data layers
 
-```mermaid
-flowchart LR
-    Source["FLAIR-HUB pinned sample"] --> Raw["data/raw · GeoTIFFs"]
-    Store["DVC remote · pgsty/silo"] <-->|"directory checksum"| Raw
-    Raw -->|"validate and transform"| Clean["PostgreSQL · dwh.tiles"]
-    Clean -->|"build_features"| Features["features.tile_features · feature_version"]
-    Features --> Gate["quality_check and monitoring reference"]
-    Raw --> Train["Train from RGB tiles"]
-    Upload["User RGB upload"] --> Serve["Compute serving inputs from the image"]
-```
+![Lab 2 data layers: the pinned FLAIR-HUB sample in data/raw with its DVC remote on pgsty/silo, training from the RGB tiles, Airflow loading dwh.tiles and features.tile_features for the quality gate, and serving inputs computed from the upload](diagrams/lab2-data-layers.svg)
+
+*Figure 4. Lab 2 data layers. Training reads the raw files that DVC versions; Airflow builds the PostgreSQL tiles and features that the quality gate and the monitoring reference use. Serving computes its inputs from the uploaded image.*
 
 ### Lab 2 Airflow DAG
 
-```mermaid
-flowchart LR
-    Interval["data_interval_start or explicit batch_id"] --> Extract[extract]
-    Extract --> Validate[validate] --> Transform[transform] --> Load[load]
-    Load --> Build[build_features] --> Gate[quality_check]
-    Load -->|"replace batch rows"| Tiles["PostgreSQL · dwh.tiles"]
-    Build --> Features["PostgreSQL · features.tile_features"]
-    Features --> Gate
-    Gate -->|"reject and remove batch rows"| Rejected["Failed run"]
-```
+![Lab 2 Airflow DAG: extract, validate, transform, load, build_features and quality_check, with load replacing the batch rows in dwh.tiles and a rejected batch failing the run](diagrams/lab2-airflow-dag.svg)
+
+*Figure 5. The Lab 2 Airflow DAG for one batch. A rejected batch has its rows removed and the run fails.*
 
 ### Lab 2 tracking and registry
 
-```mermaid
-flowchart LR
-    Run["Training result · model and run.json"] -->|"parameters, metrics, data_version, git_commit"| Tracking["MLflow tracking server"]
-    Tracking --> Metadata["PostgreSQL · mlflow"]
-    Tracking --> Artifacts["pgsty/silo · landcover-mlflow"]
-    Tracking -->|"register and probe"| Registry["landcover-segmenter · version and lineage tags"]
-    Registry -->|"champion"| Model["Load by alias · local probe or serving worker"]
-```
+![Lab 2 tracking and registry: a training result logged to the MLflow tracking server with PostgreSQL metadata and silo artifacts, registered as landcover-segmenter and loaded by the champion alias](diagrams/lab2-tracking-registry.svg)
+
+*Figure 6. Lab 2 tracking and registry. The champion alias selects the registered version that is loaded.*
+
+### Lab 3 retrieval pipeline
+
+`make retrieval-index` runs the top row. `retrieve` is built: `make retrieval-eval` sends it the questions of `eval/questions.toml` and scores the passages it returns (Section 5.4). `make answer-eval TOP_K=<n>` passes the n retrieved passages to Gemma 4 12B with `prompts/rag.md`, which asks for the numbers of the passages that state the answer, and judges the answer; without `TOP_K` the command is the plain-prompt baseline with `prompts/plain.md` (Section 5.4). Figure 8 shows the evaluation loop that compares the settings.
+
+![Lab 3 retrieval pipeline: corpus, section-bounded chunks, multilingual-e5-small and the PostgreSQL index; retrieve top-k for the evaluation set; the retrieved passages passed to Gemma 4 12B with prompts/rag.md, or the question alone with prompts/plain.md for the baseline; the answer names its passages and is judged against the reference answer](diagrams/lab3-retrieval.svg)
+
+*Figure 7. Lab 3 retrieval pipeline. Every edge is built; `prompts/rag.md` carries the retrieved passages to the model, and `prompts/plain.md` is the baseline without them.*
+
+![Lab 3 evaluation loop: for top-k 3, 5 and 10 the evaluation set goes through retrieve and Gemma 4 12B with prompts/rag.md, the same model judges each answer, hit rate, MRR, the answer metric, tokens, cost and latency are logged as one MLflow run, and after three runs the rule chooses top_k 10 in retrieval.toml](diagrams/lab3-evaluation-loop.svg)
+
+*Figure 8. Lab 3 evaluation loop. One MLflow run per value of top-k; the rule of Section 5.4 chooses the value that `retrieval.toml` holds for Lab 4.*
 
 ## 6.2 Infra
 
@@ -345,11 +369,11 @@ The local column is the course deployment. The cloud columns describe the hypoth
 | GIS assistant | Thin text service and project retriever in Minikube | ECS on EC2, core host | EKS | Same host as the API |
 | Object storage | pgsty/silo `RELEASE.2026-09-16T00-00-00Z` (S3 API) | Amazon S3 | Amazon S3 | Cheaper per GB than a disk, with managed durability |
 | Data versioning | DVC 3.67.1 with dvc-s3 3.3.0; S3 remote on pgsty/silo | DVC with S3 remote | S3 remote | Same tool in both places |
-| PostgreSQL + pgvector | PostgreSQL 16 with pgvector | RDS for PostgreSQL db.t4g.small, Single-AZ, with pgvector | RDS for PostgreSQL; OpenSearch Serverless for vectors | Managed backups and patching for $23.60/month more than self-hosting |
+| PostgreSQL + pgvector | PostgreSQL 16 with pgvector 0.8.7 (`pgvector/pgvector:0.8.7-pg16-trixie`) | RDS for PostgreSQL db.t4g.small, Single-AZ, with pgvector | RDS for PostgreSQL; OpenSearch Serverless for vectors | Managed backups and patching for $23.60/month more than self-hosting |
 | Airflow (orchestrator) | Airflow 3.3.1, LocalExecutor | Self-hosted on the core host | Amazon MWAA | A few scheduled DAGs do not justify $358/month |
 | MLflow (tracking and registry) | MLflow 3.16.1 in Compose: runs in the PostgreSQL database `mlflow`, files in the silo bucket `landcover-mlflow`, served on `127.0.0.1:5001`; no authentication until Lab 4 | Self-hosted on the core host, with authentication | SageMaker AI serverless MLflow App | Keeps the course's pinned version and alias permissions |
 | Monitoring | Prometheus, Pushgateway, Grafana, Alertmanager, Evidently job | Same, self-hosted; CloudWatch alarms and SNS for host and health-check alerts | CloudWatch; SageMaker Model Monitor | Model Monitor is closed to new customers and is designed for tabular data; a monitor cannot report a failure of the host it runs on |
-| LLM and embeddings | Host-native llama-server (Metal): Gemma 4 12B QAT Q4_0; Qwen3-Embedding-0.6B | Bedrock: Claude Sonnet 5.5; Titan Text Embeddings V2 | Amazon Bedrock | An always-on GPU costs $587.50/month before disks; the API costs $124.82 at the assumed load |
+| LLM and embeddings | Host-native llama-server (Metal): Gemma 4 12B QAT Q4_0; multilingual-e5-small in process on the CPU | Bedrock: Claude Sonnet 5.5; Titan Text Embeddings V2 | Amazon Bedrock | An always-on GPU costs $587.50/month before disks; the API costs $124.82 at the assumed load |
 | Identity | Pre-provisioned per-user tokens with roles | Amazon Cognito | Amazon Cognito | A self-hosted identity server adds a database and patching |
 | Minikube and container registry | Minikube with its registry | ECS on EC2; Amazon ECR | EKS; ECR | As above |
 | Training resource | Local CPU for review, optional existing Colab for neural experiments | EC2 g6.xlarge on demand, 40 h budget | SageMaker Training | Pay only for training hours |
@@ -376,6 +400,10 @@ The local column is the course deployment. The cloud columns describe the hypoth
 
 **Lab 2 stack.** Lab 2 runs PostgreSQL, Airflow, pgsty/silo and the MLflow server with Docker Compose on the Mac, with the pipeline code mounted from the repository. MLflow keeps its runs in its own database on the same PostgreSQL server and proxies model files to and from the bucket `landcover-mlflow`, so a client needs only the tracking address. Host port 5001 is used because macOS holds port 5000. The components move to Minikube in Lab 4.
 
+**Lab 3 index.** The retrieval index is the schema `retrieval` of the database `landcover` on the same PostgreSQL server, which uses the pgvector image and is published on `127.0.0.1:5433` because port 5432 is taken on the course Mac. `make retrieval-index` runs on the host, like `make train`, creates the extension and the schema it needs and replaces the schema in one transaction, so it works on the Lab 2 volume and on a new one. Search is an exact scan by cosine distance: for several hundred rows an approximate index would add recall loss and a build parameter for no gain.
+
+**Lab 3 text model.** `make llm-server` downloads `gemma-4-12b-it-qat-q4_0.gguf` from the Hugging Face revision `29d097773436b69ff9feafd636ab4cf873786537` into the ignored directory `models/`, refuses it on every start unless its SHA-256 equals the one in the `Makefile`, and runs `llama-server` (llama.cpp built by the same command from release `b12359`, commit `b1b770d90`) in the foreground on `127.0.0.1:8081` under the name `gemma-4-12b-it-qat-q4_0`, with a context of 8,192 tokens and one slot. The server runs on the host because Docker on this Mac has no GPU access, and on port 8081 because Airflow holds 8080. The address and the model name are the table `[llm]` of `retrieval.toml`.
+
 In Lab 4, a single documented startup command will deploy separate ML and thin text-LLM services with in-cluster MLflow on Minikube. Images carry the Git commit tag. Configuration supplies the ML, registry and host LLM endpoints and the retrieval configuration selected in Lab 3. Both services expose liveness and readiness probes. The smoke prediction will check the immutable version in the completed job. Withhold the model to demonstrate readiness failure, then change the alias to another approved version, restart and check that the next result reports that version.
 
 The segmentation service is ready only after it loads the `champion` model and its preprocessing configuration. Without the model, the readiness probe reports that the service is not ready. The assistant is ready only when its LLM endpoint and corpus index respond.
@@ -388,11 +416,11 @@ MLflow stores runs, the per-epoch training history, versions and the `champion` 
 
 **LLM choices.** [Gemma 4 12B QAT Q4_0](https://huggingface.co/google/gemma-4-12B-it-qat-q4_0-gguf) runs through [llama.cpp](https://github.com/ggml-org/llama.cpp) with Metal on the Mac host, because Docker on this Mac has no GPU access.
 
-The initial local choice assumes the 6.98 GB weights, context cache and Minikube fit in 24 GiB. Lab 3 will measure their combined peak usage and can select a smaller text model through configuration and repeat the same evaluation if necessary.
+The initial local choice assumed the 6.98 GB weights, context cache and Minikube fit in 24 GiB. Lab 3 measured the text model next to the Compose stack, after the answer run at top-k 10: llama-server had a physical footprint of 8,638 MB (peak 11 GB) plus 6,014 MB of clean memory-mapped pages of the model file, the Compose stack used 3.69 GiB, and the answer command with the embedding model 999 MiB, about 13 GiB besides the clean pages. Most of the server's footprint is its prompt cache, up to 8,192 MiB by default and capped by `--cache-ram`. The measurement next to Minikube moves to Lab 4, which can cap the cache or select a smaller text model through configuration and repeat the same evaluation.
 
 The hypothetical cloud deployment uses [Claude Sonnet 5.5 on Bedrock](https://platform.claude.com/docs/en/models/overview). Using [GPT-6.1 Sol](https://developers.openai.com/api/docs/models/gpt-6.1-sol) requires separate integration and evaluation. The service does not switch to it automatically.
 
-[Qwen3-Embedding-0.6B](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B) creates embeddings locally. The cloud uses [Titan Text Embeddings V2](https://docs.aws.amazon.com/bedrock/latest/userguide/titan-embedding-models.html) if it passes the evaluation for finding English documents with Ukrainian queries. After the embedding model changes, the corpus index is rebuilt and saved under a new version.
+[multilingual-e5-small](https://huggingface.co/intfloat/multilingual-e5-small) (118 M parameters, 384 dimensions, 471 MB of weights) creates embeddings locally, in process on the CPU at a pinned revision: the index build loads it, and in Lab 4 the text service will embed the question itself within its budget of under 1 GB. [Qwen3-Embedding-0.6B](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B) in a host-native llama-server was the first choice; it is five times larger and would make a reviewer start a second server before the one index command. The cloud uses [Titan Text Embeddings V2](https://docs.aws.amazon.com/bedrock/latest/userguide/titan-embedding-models.html) if it passes the evaluation for finding English documents with Ukrainian queries. After the embedding model changes, the corpus index is rebuilt and saved under a new version.
 
 **Cloud placement.** The always-on m6a.xlarge core host (4 vCPU, 16 GiB) runs the HTTPS proxy, both APIs, Airflow, MLflow, Prometheus, Grafana and one worker. A burst Auto Scaling group of 0–1 identical hosts adds up to three workers.
 
@@ -420,6 +448,16 @@ The mean-load formula does not determine p95 completion time. A load test measur
 **Measurement method.** Limit a worker to 1 vCPU and 4 GiB. Measure cold start separately. For each image size, 1024×1024 and 4096×4096, perform 5 warm-up runs followed by 30 measured runs. Record the time spent at each stage and peak memory use.
 
 Replay twice the peak arrival rate for an hour. Record p95 completion time and queue wait. If the measured p95 completion time exceeds 5 minutes, first try ONNX Runtime or larger tiles. Then try more workers within the cost ceiling and the four-worker limit. Consider relaxing the target only after these steps.
+**Text model (Lab 3 measurements).** Gemma 4 12B, quantisation-aware trained and stored as Q4_0 GGUF (6.98 GB), runs in llama-server with Metal on the M4 Pro (24 GiB unified memory), with a context of 8,192 tokens and one slot, so answers are sequential. Latency per answer, retrieval included, over the 32 questions:
+
+| Prompt | p50 | p95 | Prompt tokens per answer |
+|---|---|---|---|
+| Plain, no retrieval | 1.76 s | 2.88 s | 119 |
+| Retrieval-augmented, top-k 5 | 6.86 s | 9.11 s | 1,124 |
+| Retrieval-augmented, top-k 10 (chosen) | 10.72 s | 12.95 s | 2,059 |
+
+Retrieval itself takes about 60 ms per question within an answer run (1.91 s for 32 at top-k 10) and about 11 ms in `make retrieval-eval`; the rest is the model, which evaluates the prompt at about 275 tokens per second before the first output token, so the latency grows with top-k. The prompt cache does not help: Gemma 4 uses sliding-window attention in part of its layers, llama.cpp by default keeps only that window, and a prompt that shares only a prefix with the previous one is evaluated again from its second token. Only the shortest prompts with passages, at top-k 3, reused 162 to 180 tokens of their shared start. With `--swa-full` the shared instruction is reused, which saved about 0.4 s per call for 61 MB more memory in a measurement on the same build; it is the first latency lever for Lab 4. The server command stays unchanged until then so that all Lab 3 rows come from one configuration. An API model would move the prompt evaluation off the Mac and free its memory, at the cost per token of Section 6.7.
+
 ## 6.4 Security
 
 - **Authentication.** Cloud users sign in with Cognito; the API checks the token's issuer, audience, signature and expiry. Locally, pre-provisioned per-user tokens map to the `gis_user` and `operator` roles.
@@ -512,6 +550,17 @@ In this estimate, LLM calls account for 41% of steady-month costs. If the agent 
 
 The calculator is $2.27 below the listed-rate steady-month total because it omits the domain charge, applies some allowances, and uses different log-storage and rounding assumptions. Its training increment is $0.33 lower because of temporary IPv4, disk prorating and rounding.
 
+**Measured in Lab 3.** The course runs spent $0: the text model runs on the Mac. Per answer over the 32 questions, with the shadow cost at the Sonnet 5.5 rates above (Gemma's tokenizer counts differently from Claude's):
+
+| Run | Tokens in | Tokens out | Shadow cost | Compute |
+|---|---|---|---|---|
+| Plain, no retrieval | 119 | 42 | $0.0007 | 1.8 s |
+| Top-k 3 | 751 | 41 | $0.0019 | 3.5 s |
+| Top-k 5 | 1,124 | 45 | $0.0027 | 6.8 s |
+| Top-k 10 (chosen) | 2,059 | 49 | $0.0046 | 10.5 s |
+
+One answer at the chosen top-k uses about a third of the 6,400 input tokens and a sixteenth of the 800 output tokens budgeted per model call above, so the assistant task of five calls has room for its conversation and tool results; the monthly totals are left unchanged. Local inference costs no money, keeps the questions on the Mac and needs no account, but takes about 11 s per answer and a server footprint of 8,638 MB on the Mac; an API moves the prompt evaluation to the provider and offers a stronger model for about half a cent per answer here, and sends the question to the provider, which matters little for questions about a public corpus. The course keeps local inference; the cloud design keeps Bedrock (Section 6.2).
+
 ## 6.8 Integration points
 
 Public data providers do not guarantee that their data stays up to date or remains available. We therefore pin each source's revision, record file checksums and set our own rules for accepting data.
@@ -521,7 +570,7 @@ Public data providers do not guarantee that their data stays up to date or remai
 | OEM authors → training-data ingestion pipeline | Zenodo release: images, masks, metadata; xBD images from xview2.org | Once, for the initial batch; not ingested in the course yet | We record the release ID and checksums, remap labels, and reject the whole batch if grids do not match or IDs are unknown |
 | IGN (FLAIR-HUB) → training-data ingestion pipeline | Each batch is one domain's `AERIAL_RGBI` and `AERIAL_LABEL-COSIA` files at a pinned Hugging Face commit; the course fetches 16 pairs per domain from the ZIPs (Section 5.2) | When the operator starts an update | Retrieval fails unless the fetched files hash to the DVC identifier in `data/raw.dvc`. The pipeline applies the structural checks and the quality gate (Section 6.6); a refused batch leaves no rows |
 | USGS / UGRC (NAIP) → monitoring | 4-band GeoTIFF tiles; the adapter keeps RGB | Optional, separately for each imagery vintage (Section 5.2) | We record tile IDs and checksums; the tiles are used only in drift reports |
-| Documentation authors → corpus | Pages and PDFs listed in Section 5.2 | We save copies when building the corpus | Each copy has a SHA-256 checksum. A changed page gets a new `doc_version`; the saved version is not edited |
+| Documentation authors → corpus | Cleaned Markdown copies of the pages and papers listed in Section 5.2, committed in `corpus/` with a manifest | Copies are made once by hand and replaced deliberately | `make retrieval-index` stops unless every copy hashes to its SHA-256 in the manifest and Sections 5.1 and 6.8 exist; a failed build keeps the earlier index. A replaced copy gets a new `doc_version`; a saved copy is not edited |
 | GIS user → API | One image per request, in the Section 4 formats and bounds | Any time | We return a job ID, or a validation error that explains the problem |
 | API → GIS user | Job status and the result package (Section 4) | Completion p95 as in Section 3; available until `accepted_at` + 24 h, including queue and processing time | A failed job returns its reason and no partial package |
 | Assistant → Lab 3 retriever (`retrieve`) | Question text → relevant passages with `doc_id`, `doc_version` and section locator | Once for a legend question or the explanation in a combined request | Cite the passage supporting the answer. If no source supports it, report that limitation |
@@ -566,6 +615,12 @@ Lab 5 will exercise the same two tools on a versioned set of at least ten tasks,
 | MWAA and a legacy managed MLflow server | No Airflow or MLflow operations | About $797/month together | Self-hosted (Section 6.2) |
 | High availability: second host, RDS Multi-AZ, load balancer | Survives one host or zone failure | About +$190/month and failover tests | Not selected; continuous single-host service |
 | Learning from GIS users' corrections | Real labels for new regions | Needs consent and image licences; an "OK" click confirms the model's own errors; needs a review interface | Not in the first version (Section 6.5) |
+| An API model (Bedrock, Claude Sonnet 5.5) instead of local inference for the course | Prompt evaluation on the provider's hardware; a stronger model; no model in the Mac's memory | Paid, about $0.0046 per answer at top-k 10; an account and network access; the course requires zero paid spend | Local llama-server in the course; Bedrock in the cloud design (Section 6.2) |
+| vLLM on this Mac | Continuous batching and prefix caching behind the same OpenAI protocol | Built for CUDA GPUs; its macOS support is a CPU backend, without Metal | llama.cpp with Metal; vLLM belongs on a GPU host |
+| Fine-tuning the model on the corpus instead of retrieval | No retrieval at request time; shorter prompts | Needs training pairs and a GPU, has to be repeated whenever a document changes, and cannot cite the passage that Section 5.1 requires | Rejected |
+| The whole corpus in every prompt | No retrieval to tune | About 62,000 tokens: more than the local context of 8,192, and about $0.12 per question at the Sonnet 5.5 rate | Rejected |
+| A strict prompt: answer only from the passages | Follows Section 5.1 most literally | Turns answers the model knows into refusals | Not run; the permissive prompt with `Sources: none` was chosen, and in practice it already answered only from passages (Section 5.4) |
+| Qdrant instead of pgvector | A dedicated vector database with filtering and approximate search at scale | Another service; 575 chunks need no approximate index, and PostgreSQL is already in the stack | pgvector (Section 6.2) |
 
 ## 7.2 Lab 2 model results
 
@@ -581,6 +636,41 @@ The majority-class rule beat the forest on pixel accuracy. Both trained models b
 
 The commits share the same model and training code, lockfile and DVC pointer. The historical Random Forest v1 repeated on CPU at **0.1478 mIoU**, matching the original score to four decimals with a tolerance of 0.01. Its reproduction is MLflow run `77375bfa9d574a74884c68213713593c`. Both Colab L4 repeats of historical U-Net v2 used the pinned EfficientNet-B4 encoder revision `c474abe5a8689bd017e9a50b41aa72ac253a63e1` and matched the original **0.3355 mIoU**. With zero observed difference, the tolerance is the minimum of 0.02. [Reproduction run IDs](../README.md#reproduction)
 
+### Lab 3 retrieval results
+
+Index `5570e99ba60e`, evaluation set `5e2556f998a1` (32 questions), commit `c472b1a1301f18cf228d868ced02d02570c5310f`. Definitions are in Section 5.4. A search includes the embedding of the question on the CPU.
+
+| top-k | Hit rate | MRR | Search p50 | Search p95 | Run ID |
+|---|---|---|---|---|---|
+| 3 | 0.531 | 0.422 | 0.011 s | 0.013 s | `f01baf6f55854c988c732d28f60d762a` |
+| 5 | 0.656 | 0.450 | 0.011 s | 0.013 s | `1bbbd66dfd6343f18be0cc4cc9bc2f21` |
+| 10 | 0.844 | 0.473 | 0.011 s | 0.013 s | `c50f9644767e43a0b5b47e243cfeb380` |
+
+At k = 5, the NAIP dictionary misses 3 of 4 questions, FLAIR-HUB 3 of 6 and the QGIS page 3 of 8; `export-contract` has none. The choice of k was made on the answer metric of the retrieval-augmented runs below: k = 10. The rows replace runs `1405ba4d9eba46a88121bb6cb7ea97c9`, `c001c9b19cee4abb9b9761b9a655e100` and `a11718188dd549dc8542bd70f145d6f2` (hit rate 0.469, 0.594 and 0.750) on set `d06b7a39c631` and index `56be0057b30e`. After the review of Lab 3 the set was revised a second time, mostly by citing further passages that state the answers, and the index version now includes the version of the chunking and embedding code; the chunks are the same.
+
+### Lab 3 answer results
+
+Model `gemma-4-12b-it-qat-q4_0`, llama-server build `b12359-b1b770d90`, answer prompt `e88db3af2e2d`, judge prompt `a11f648cb1f0`, evaluation set `5e2556f998a1`, commit `c472b1a1301f18cf228d868ced02d02570c5310f`. The answer metric and the judge are defined in Section 5.4.
+
+| Prompt | Answer correct | Tokens in | Tokens out | Shadow cost | Compute | p50 | p95 | Run ID |
+|---|---|---|---|---|---|---|---|---|
+| plain, no retrieval | 0.500 (16 of 32) | 3,822 | 1,346 | $0.0211 | 58.1 s | 1.76 s | 2.88 s | `e6d9e1d6e94b414f998e2c4862da704d` |
+
+Without passages the model answered 2 of the 6 `export-contract` questions correctly. The row replaces run `8fe988ff4fa94f2d956a189fb9015b8d` (0.469) on set `d06b7a39c631`, which replaced run `736634076b744485a8c19f690101c03c` (0.312) on the first set `0174445a4974`. The extra answer judged correct is q25, which the reviewed labels reject. The shadow cost prices the answer tokens at the Sonnet 5.5 rates of Section 6.7; the run cost no money. The retrieval-augmented runs below are compared with this row.
+
+### Lab 3 retrieval-augmented answer results
+
+Model `gemma-4-12b-it-qat-q4_0`, llama-server build `b12359-b1b770d90`, plain prompt `e88db3af2e2d`, retrieval-augmented prompt `4be4e95ed4e7` (`prompts/rag.md`), judge prompt `a11f648cb1f0`, index `5570e99ba60e`, evaluation set `5e2556f998a1`; the plain row is the baseline above, the runs at top-k 3 and 5 on commit `c472b1a1301f18cf228d868ced02d02570c5310f` and the run at top-k 10 on commit `feb483bb18ab2c7a5829a4fc1056380f3cd463cf`, which adds only the labels of the judge checks. Latency adds each question's retrieval to its answer call (Section 5.4).
+
+| top-k | Hit rate | MRR | Answer correct | Tokens in | Tokens out | Shadow cost | Compute | p50 | p95 | Run ID |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0, plain | – | – | 0.500 (16 of 32) | 3,822 | 1,346 | $0.0211 | 58.1 s | 1.76 s | 2.88 s | `e6d9e1d6e94b414f998e2c4862da704d` |
+| 3 | 0.531 | 0.422 | 0.469 (15 of 32) | 24,047 | 1,303 | $0.0611 | 111.0 s | 3.49 s | 4.56 s | `3163de3f58e54a45bf846d0f74b30c43` |
+| 5 | 0.656 | 0.450 | 0.656 (21 of 32) | 35,956 | 1,455 | $0.0865 | 218.2 s | 6.86 s | 9.11 s | `7fdebd8f4a974e50835fcf6d9dd6b3f1` |
+| 10 | 0.844 | 0.473 | 0.781 (25 of 32) | 65,900 | 1,564 | $0.1474 | 336.5 s | 10.72 s | 12.95 s | `af9dc5b71a6e4ba7a6a598ef8f4636b9` |
+
+By the rule of Section 5.4, the smallest k within two questions of the best, the chosen top-k is 10: 25 of 32 against 21 at k = 5 and 15 at k = 3. It is the value in `retrieval.toml` that Lab 4 serves, at the cost of a p50 of 10.7 s against 6.9 s at k = 5. Every answer that names no passage was judged incorrect. The four rows replace runs `8fe988ff4fa94f2d956a189fb9015b8d`, `1d13c9db9d0c46b29ef62243f770290d`, `1591a97b45fc4e6c910919598a964051` and `01551e9c8bdf43fc956a149c57f773c3` (15, 15, 19 and 25 of 32) on set `d06b7a39c631` with judge prompt `5b291def62c3`. The first run at top-k 10 on the revised set, `31c7400e856a49a8a85baaf4bb802cc2`, gave the same answers and verdicts; it was repeated because the Mac was swapping during it, which put its p95 at 27.70 s.
+
 ## 7.3 Placeholder
 
 Lab 4 fills this section with deployed throughput, p50 and p95 latency and resource measurements.
@@ -588,7 +678,7 @@ Lab 4 fills this section with deployed throughput, p50 and p95 latency and resou
 ## 7.4 Milestones
 
 - **Lab 2** adds versioned data pulls, idempotent batch ingestion with a check that stops the run for a deliberately invalid batch, the majority-class baseline, the random forest and the U-Net trained on a split by whole batch, an MLflow server with a PostgreSQL backend and an object-store artifact store, runs and registered versions tagged with the data version and commit, the `champion` alias, and one command that reproduces a registered version.
-- **Lab 3** will rebuild and count the corpus index, compare plain and retrieved answers across retrieval settings, and publish the chosen configuration and prompt hashes for serving.
+- **Lab 3** rebuilt and counted the corpus index, compared plain and retrieval-augmented answers at top-k 3, 5 and 10 with a checked judge, and published the chosen configuration for serving: index `5570e99ba60e`, top-k 10, `prompts/rag.md` `4be4e95ed4e7` and `prompts/judge.md` `a11f648cb1f0`.
 - **Lab 4** will start the two services, check alias loading, readiness and a versioned smoke prediction, and demonstrate two endpoint replay windows on the dashboard with a delivered drift email.
 - **Lab 5** will run at least ten versioned tasks twice against the Lab 3 retriever and Lab 4 prediction endpoint, reporting pass rate, steps, cost and traces for refusal and budget exhaustion.
 

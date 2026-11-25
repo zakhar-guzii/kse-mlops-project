@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 620" width="1000" height="620" role="img" aria-labelledby="title desc">
   <title id="title">Deployment, first draft</title>
-  <desc id="desc">The Mac M4 Pro host runs Minikube, whose managed equivalent is Amazon EKS. Inside Minikube: the segmentation service with FastAPI, web UI and CPU workers (EKS); the thin text service and Lab 3 retriever (EKS); identity with per-user tokens (Amazon Cognito); object storage, pgsty/silo (S3 API) with the DVC remote (Amazon S3); PostgreSQL 16 with pgvector (RDS for PostgreSQL; OpenSearch Serverless for vectors); Airflow 3.3.1 (Amazon MWAA); MLflow 3.16.1 with runs in PostgreSQL, files in a silo bucket and the registry alias champion, without authentication until Lab 4 (SageMaker AI MLflow App); monitoring with Prometheus, Pushgateway, Grafana, Alertmanager and Evidently (Amazon CloudWatch; SageMaker Model Monitor); the container registry (Amazon ECR). Outside Minikube on the Mac host: LLM and embeddings in a host-native llama-server with Metal, Gemma 4 12B QAT and Qwen3-Embedding-0.6B (Amazon Bedrock). Local CPU training runs on the Mac. Outside the host: optional Colab L4 (SageMaker Training). Blue italic names are managed AWS equivalents, given for reference; the selected cloud deployment is in Section 6.2. No arrows; Lab 4 replaces this first draft with the real topology. Feature store not needed.</desc>
+  <desc id="desc">The Mac M4 Pro host runs Minikube, whose managed equivalent is Amazon EKS. Inside Minikube: the segmentation service with FastAPI, web UI and CPU workers (EKS); the thin text service and Lab 3 retriever (EKS); identity with per-user tokens (Amazon Cognito); object storage, pgsty/silo (S3 API) with the DVC remote (Amazon S3); PostgreSQL 16 with pgvector (RDS for PostgreSQL; OpenSearch Serverless for vectors); Airflow 3.3.1 (Amazon MWAA); MLflow 3.16.1 with runs in PostgreSQL, files in a silo bucket and the registry alias champion, without authentication until Lab 4 (SageMaker AI MLflow App); monitoring with Prometheus, Pushgateway, Grafana, Alertmanager and Evidently (Amazon CloudWatch; SageMaker Model Monitor); the container registry (Amazon ECR). Outside Minikube on the Mac host: the LLM in a host-native llama-server with Metal, Gemma 4 12B QAT, and embeddings with multilingual-e5-small in process on the CPU, in the index build and, from Lab 4, in the text service (Amazon Bedrock). Local CPU training runs on the Mac. Outside the host: optional Colab L4 (SageMaker Training). Blue italic names are managed AWS equivalents, given for reference; the selected cloud deployment is in Section 6.2. No arrows; Lab 4 replaces this first draft with the real topology. Feature store not needed.</desc>
   <style>
     text { font-family: Helvetica, Arial, sans-serif; fill: #111827; }
     .host { fill: #f9fafb; stroke: #374151; stroke-width: 2; }
@@ -94,8 +94,8 @@
   <text class="name" x="872" y="120" text-anchor="middle">LLM and embeddings</text>
   <text class="local" x="872" y="140" text-anchor="middle">host-native, not in</text>
   <text class="local" x="872" y="157" text-anchor="middle">Minikube: llama-server</text>
-  <text class="local" x="872" y="174" text-anchor="middle">(Metal), Gemma 4 12B,</text>
-  <text class="local" x="872" y="191" text-anchor="middle">Qwen3-Embedding-0.6B</text>
+  <text class="local" x="872" y="174" text-anchor="middle">(Metal), Gemma 4 12B;</text>
+  <text class="local" x="872" y="191" text-anchor="middle">e5-small embeddings, CPU</text>
   <line class="div" x1="785" y1="214" x2="960" y2="214"/>
   <text class="managed" x="872" y="238" text-anchor="middle">Amazon Bedrock</text>
 

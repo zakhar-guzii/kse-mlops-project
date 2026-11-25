@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="380" viewBox="0 0 1000 380" role="img" aria-labelledby="title desc">
+  <title id="title">Lab 2 tracking and registry</title>
+  <desc id="desc">A training result, the model and run.json, is logged to the MLflow tracking server with its parameters, metrics, data_version and git_commit. The server keeps run metadata in PostgreSQL mlflow and artifacts in the pgsty/silo bucket landcover-mlflow. A probed model is registered as a version of landcover-segmenter with lineage tags, and the champion alias is loaded by the local probe or a serving worker.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#334155"/></marker>
+  </defs>
+  <style>
+    text { font: 15px Helvetica, Arial, sans-serif; fill: #26354a; }
+    .name { font-size: 17px; font-weight: bold; fill: #162e53; }
+    g rect { fill: #eef4ff; stroke: #335582; stroke-width: 1.5; }
+    .flow { fill: none; stroke: #334155; stroke-width: 2; marker-end: url(#arrow); }
+    .next { stroke-dasharray: 6 5; }
+    .label { fill: #244b75; }
+    .gate { fill: #92400e; font-weight: bold; }
+  </style>
+  <rect width="1000" height="380" fill="white"/>
+  <g transform="translate(24 16)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">Training result</text>
+    <text x="14" y="47">Model and run.json</text>
+  </g>
+
+  <g transform="translate(371 16)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">MLflow tracking server</text>
+    <text x="14" y="47">Parameters, metrics,</text>
+    <text x="14" y="67">data_version, git_commit</text>
+  </g>
+
+  <g transform="translate(718 16)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">Run metadata</text>
+    <text x="14" y="47">PostgreSQL · mlflow</text>
+  </g>
+
+  <g transform="translate(718 150)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">Artifacts</text>
+    <text x="14" y="47">pgsty/silo · landcover-mlflow</text>
+  </g>
+
+  <g transform="translate(371 150)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">Model registry</text>
+    <text x="14" y="47">landcover-segmenter versions</text>
+    <text x="14" y="67">with lineage tags</text>
+  </g>
+
+  <g transform="translate(371 284)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">Load by alias</text>
+    <text x="14" y="47">Local probe or serving worker</text>
+  </g>
+
+  <path class="flow" d="M283 56 H368"/>
+  <path class="flow" d="M631 46 H715"/>
+  <path class="flow" d="M631 76 H674 V190 H715"/>
+  <path class="flow" d="M500 97 V147"/>
+  <text class="label" x="514" y="128">register and probe</text>
+  <path class="flow" d="M500 231 V281"/>
+  <text class="label" x="514" y="262">champion</text>
+</svg>

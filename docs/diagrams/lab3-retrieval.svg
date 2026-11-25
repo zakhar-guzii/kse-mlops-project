@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="514" viewBox="0 0 1000 514" role="img" aria-labelledby="title desc">
+  <title id="title">Lab 3 retrieval pipeline</title>
+  <desc id="desc">make retrieval-index checks the corpus copies against their SHA-256 manifest, cuts them into section-bounded chunks, embeds them with multilingual-e5-small on the CPU and stores them in PostgreSQL. retrieval.toml sets the chunking, the embedding model and top_k. make retrieval-eval sends the evaluation questions to retrieve. make answer-eval TOP_K=n sends each question's retrieved passages to Gemma 4 12B on llama-server with prompts/rag.md, and the answer names the passages that state it; without TOP_K the command sends the question alone with prompts/plain.md. The same model judges each answer against the reference answer with prompts/judge.md.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#334155"/></marker>
+  </defs>
+  <style>
+    text { font: 15px Helvetica, Arial, sans-serif; fill: #26354a; }
+    .name { font-size: 17px; font-weight: bold; fill: #162e53; }
+    g rect { fill: #eef4ff; stroke: #335582; stroke-width: 1.5; }
+    .flow { fill: none; stroke: #334155; stroke-width: 2; marker-end: url(#arrow); }
+    .label { fill: #244b75; }
+    .gate { fill: #92400e; font-weight: bold; }
+  </style>
+  <rect width="1000" height="514" fill="white"/>
+  <g transform="translate(24 16)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">Corpus</text>
+    <text x="14" y="47">corpus/ copies and manifest</text>
+    <text x="14" y="67">SHA-256 checked</text>
+  </g>
+
+  <g transform="translate(371 16)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">Chunks</text>
+    <text x="14" y="47">Section-bounded, with doc_id,</text>
+    <text x="14" y="67">doc_version and locator</text>
+  </g>
+
+  <g transform="translate(718 16)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">multilingual-e5-small</text>
+    <text x="14" y="47">Embeddings on the CPU,</text>
+    <text x="14" y="67">in process</text>
+  </g>
+
+  <g transform="translate(371 150)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">retrieval.toml</text>
+    <text x="14" y="47">Chunking, embedding model and</text>
+    <text x="14" y="67">revision, top_k, [llm]</text>
+  </g>
+
+  <g transform="translate(718 150)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">PostgreSQL index</text>
+    <text x="14" y="47">retrieval.chunks and</text>
+    <text x="14" y="67">index_meta</text>
+  </g>
+
+  <g transform="translate(24 284)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">Evaluation set</text>
+    <text x="14" y="47">eval/questions.toml</text>
+    <text x="14" y="67">32 questions</text>
+  </g>
+
+  <g transform="translate(371 284)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">retrieve top-k</text>
+    <text x="14" y="47">make retrieval-eval</text>
+    <text x="14" y="67">make answer-eval TOP_K=n</text>
+  </g>
+
+  <g transform="translate(371 418)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">Gemma 4 12B QAT Q4_0</text>
+    <text x="14" y="47">llama-server · make answer-eval</text>
+  </g>
+
+  <g transform="translate(718 418)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">Answer</text>
+    <text x="14" y="47">Judged with prompts/judge.md</text>
+    <text x="14" y="67">Sources: [n] or none</text>
+  </g>
+
+  <path class="flow" d="M283 56 H368"/>
+  <path class="flow" d="M631 56 H715"/>
+  <path class="flow" d="M847 97 V147"/>
+  <path class="flow" d="M500 149 V100"/>
+  <text class="label" x="486" y="130" text-anchor="end">chunk_size, chunk_overlap</text>
+  <path class="flow" d="M631 170 H674 V76 H715"/>
+  <path class="flow" d="M500 231 V281"/>
+  <text class="label" x="514" y="262">top_k</text>
+  <path class="flow" d="M847 231 V324 H633"/>
+  <path class="flow" d="M283 324 H368"/>
+  <path class="flow" d="M500 365 V415"/>
+  <text class="label" x="514" y="396">passages · prompts/rag.md</text>
+  <path class="flow" d="M153 365 V458 H368"/>
+  <text class="label" x="167" y="392">prompts/plain.md,</text>
+  <text class="label" x="167" y="412">no passages</text>
+  <path class="flow" d="M631 458 H715"/>
+</svg>

@@ -16,3 +16,6 @@ docs/research/
 .DS_Store
 
 runs/
+
+# Lab 3 text model file, fetched by make llm-server.
+models/

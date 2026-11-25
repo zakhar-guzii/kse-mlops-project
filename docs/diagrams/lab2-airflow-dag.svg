@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="486" viewBox="0 0 1000 486" role="img" aria-labelledby="title desc">
+  <title id="title">Lab 2 Airflow DAG</title>
+  <desc id="desc">A run takes its batch from data_interval_start or an explicit batch_id. The tasks extract, validate, transform and load the batch; load replaces the batch&#x27;s rows in PostgreSQL dwh.tiles. build_features writes features.tile_features, and quality_check reads them. When the check rejects the batch, its rows are removed and the run fails.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#334155"/></marker>
+  </defs>
+  <style>
+    text { font: 15px Helvetica, Arial, sans-serif; fill: #26354a; }
+    .name { font-size: 17px; font-weight: bold; fill: #162e53; }
+    g rect { fill: #eef4ff; stroke: #335582; stroke-width: 1.5; }
+    .flow { fill: none; stroke: #334155; stroke-width: 2; marker-end: url(#arrow); }
+    .next { stroke-dasharray: 6 5; }
+    .label { fill: #244b75; }
+    .gate { fill: #92400e; font-weight: bold; }
+  </style>
+  <rect width="1000" height="486" fill="white"/>
+  <g transform="translate(24 16)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">Batch</text>
+    <text x="14" y="47">data_interval_start or</text>
+    <text x="14" y="67">an explicit batch_id</text>
+  </g>
+
+  <g transform="translate(24 150)">
+    <rect width="258" height="56" rx="7"/>
+    <text class="name" x="129" y="34" text-anchor="middle">extract</text>
+  </g>
+
+  <g transform="translate(371 150)">
+    <rect width="258" height="56" rx="7"/>
+    <text class="name" x="129" y="34" text-anchor="middle">validate</text>
+  </g>
+
+  <g transform="translate(718 150)">
+    <rect width="258" height="56" rx="7"/>
+    <text class="name" x="129" y="34" text-anchor="middle">transform</text>
+  </g>
+
+  <g transform="translate(718 270)">
+    <rect width="258" height="56" rx="7"/>
+    <text class="name" x="129" y="34" text-anchor="middle">load</text>
+  </g>
+
+  <g transform="translate(371 270)">
+    <rect width="258" height="56" rx="7"/>
+    <text class="name" x="129" y="34" text-anchor="middle">build_features</text>
+  </g>
+
+  <g transform="translate(24 270)">
+    <rect width="258" height="56" rx="7"/>
+    <text class="name" x="129" y="34" text-anchor="middle">quality_check</text>
+  </g>
+
+  <g transform="translate(718 390)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">PostgreSQL</text>
+    <text x="14" y="47">dwh.tiles</text>
+  </g>
+
+  <g transform="translate(371 390)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">PostgreSQL</text>
+    <text x="14" y="47">features.tile_features</text>
+  </g>
+
+  <g transform="translate(24 390)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">Failed run</text>
+    <text x="14" y="47">The batch rows are removed</text>
+  </g>
+
+  <path class="flow" d="M153 97 V147"/>
+  <path class="flow" d="M283 178 H368"/>
+  <path class="flow" d="M630 178 H715"/>
+  <path class="flow" d="M847 207 V267"/>
+  <path class="flow" d="M717 298 H633"/>
+  <path class="flow" d="M370 298 H285"/>
+  <path class="flow" d="M847 327 V387"/>
+  <text class="label" x="833" y="362" text-anchor="end">replace batch rows</text>
+  <path class="flow" d="M500 327 V387"/>
+  <path class="flow" d="M370 430 H326 V314 H285"/>
+  <path class="flow" d="M153 327 V387"/>
+  <text class="gate" x="167" y="362">reject</text>
+</svg>

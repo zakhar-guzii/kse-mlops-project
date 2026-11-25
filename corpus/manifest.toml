@@ -1,0 +1,44 @@
+# Retrieval corpus (docs/design.md, Section 5.2). Each copy is cleaned Markdown made once by hand
+# from its source; sha256 is of the committed file, so the index build stops if a copy was edited.
+
+[[documents]]
+doc_id = "oem-paper"
+title = "OpenEarthMap: A Benchmark Dataset for Global High-Resolution Land Cover Mapping"
+file = "corpus/oem-paper.md"
+urls = ["https://arxiv.org/html/2210.10732"]
+accessed = 2026-11-23
+sha256 = "d5ef6d108fac05e5721e7e69b1fef7fcf8c0080aae601ae5457f09b0c92d6a65"
+
+[[documents]]
+doc_id = "flair-hub"
+title = "FLAIR-HUB: Large-scale Multimodal Dataset for Land Cover and Crop Mapping"
+file = "corpus/flair-hub.md"
+urls = [
+    "https://arxiv.org/html/2506.07080v1",
+    "https://github.com/IGNF/FLAIR-HUB/blob/a0c47d5ffcd4792b84eea213a68485c200065d43/configs/train/config_supervision.yaml",
+]
+accessed = 2026-11-23
+sha256 = "aaa583e7ac5a58c782a901d1f42cf49418bd0fea5e196d98c22edc678d33da0c"
+
+[[documents]]
+doc_id = "naip-dictionary"
+title = "National Agriculture Imagery Program (NAIP) Data Dictionary"
+file = "corpus/naip-dictionary.md"
+urls = ["https://www.usgs.gov/centers/eros/science/national-agriculture-imagery-program-naip-data-dictionary"]
+accessed = 2026-11-23
+sha256 = "e2c33d728b30f7f6f481ac2abceb612228878eb387c53af8aba7600f516524ed"
+
+[[documents]]
+doc_id = "qgis-raster"
+title = "QGIS 3.44 User Manual: Raster Properties Dialog"
+file = "corpus/qgis-raster.md"
+urls = ["https://docs.qgis.org/3.44/en/docs/user_manual/working_with_raster/raster_properties.html"]
+accessed = 2026-11-23
+sha256 = "544836077d69792104aa2382708d416bb80cd44995f250c0df4c9998c7348bc9"
+
+# Read from the design document when the index is built; it has no saved copy.
+[[documents]]
+doc_id = "export-contract"
+title = "Land-cover export contract"
+file = "docs/design.md"
+sections = ["5.1", "6.8"]

@@ -1,4 +1,4 @@
-.PHONY: setup lint test up down airflow-password data pull-data train import register champion reproduce train-remote
+.PHONY: setup lint test up down airflow-password data pull-data train import register champion reproduce train-remote retrieval-index retrieval-eval llm-server answer-eval
 
 # Credentials for DVC and Compose come from the untracked .env (see .env.example).
 -include .env
@@ -62,3 +62,54 @@ reproduce:
 # Only scripts/remote_train.py is sent; the session is stopped on success and on failure.
 train-remote:
 	uv run --locked --group nn python -m landcover.remote $(or $(GPU),L4) $(ARGS)
+
+# Lab 3: rebuild the retrieval index from corpus/ and retrieval.toml on the host. The first run downloads
+# the embedding model (471 MB) from Hugging Face; later runs use its cache.
+WAREHOUSE_DSN ?= postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@localhost:5433/landcover
+
+retrieval-index:
+	uv run --locked --group rag python -m landcover.retrieval index
+
+# Evaluate eval/questions.toml against the current index and log one run to MLflow (experiment
+# landcover-retrieval). Refuses an uncommitted tree and a stale index. TOP_K=<n> overrides top_k for one run.
+retrieval-eval:
+	uv run --locked --group rag python -m landcover.retrieval eval $(if $(TOP_K),--top-k $(TOP_K))
+
+# Lab 3: the text model. Builds llama-server at the pinned llama.cpp release once (Xcode command line tools;
+# CMake comes from PyPI through uvx), downloads the pinned GGUF file once (6.98 GB, resumable), checks its
+# SHA-256 on every start, then runs the server in the foreground on 127.0.0.1:8081.
+# --alias must equal model in the [llm] table of retrieval.toml.
+LLAMA_TAG = b12359
+LLAMA_COMMIT = b1b770d90
+LLAMA_DIR = models/llama.cpp
+LLAMA_SERVER = $(LLAMA_DIR)/build/bin/llama-server
+CMAKE = uvx --from cmake==3.31.6 cmake
+LLM_REPO = https://huggingface.co/google/gemma-4-12B-it-qat-q4_0-gguf/resolve/29d097773436b69ff9feafd636ab4cf873786537
+LLM_FILE = models/gemma-4-12b-it-qat-q4_0.gguf
+LLM_SHA256 = 93567e57a8fe10b23569b9d9ec38cd005deedf71e29477c421a4b83f418a538b
+
+# A partial clone, not a shallow one: llama.cpp numbers its build by the commit count.
+$(LLAMA_SERVER):
+	test -d $(LLAMA_DIR) || git clone --filter=blob:none --branch $(LLAMA_TAG) \
+		https://github.com/ggml-org/llama.cpp $(LLAMA_DIR)
+	test "$$(git -C $(LLAMA_DIR) rev-parse --short=9 HEAD)" = $(LLAMA_COMMIT)
+	$(CMAKE) -S $(LLAMA_DIR) -B $(LLAMA_DIR)/build -DCMAKE_BUILD_TYPE=Release -DGGML_METAL=ON -DLLAMA_CURL=OFF
+	$(CMAKE) --build $(LLAMA_DIR)/build --target llama-server -j
+
+$(LLM_FILE):
+	mkdir -p models
+	curl -L --fail -C - -o $@.part $(LLM_REPO)/$(notdir $@)
+	echo "$(LLM_SHA256)  $@.part" | shasum -a 256 -c
+	mv $@.part $@
+
+llm-server: $(LLAMA_SERVER) $(LLM_FILE)
+	echo "$(LLM_SHA256)  $(LLM_FILE)" | shasum -a 256 -c
+	$(LLAMA_SERVER) -m $(LLM_FILE) --alias gemma-4-12b-it-qat-q4_0 \
+		--host 127.0.0.1 --port 8081 --ctx-size 8192 --parallel 1
+
+# Answer eval/questions.toml with prompts/plain.md and no retrieval, judge each answer with prompts/judge.md,
+# and log one run to MLflow (experiment landcover-answers). Needs make llm-server and a clean tree.
+# TOP_K=<n> retrieves n passages per question from the current index and answers with prompts/rag.md
+# (group rag; refuses a stale index).
+answer-eval:
+	uv run --locked $(if $(TOP_K),--group rag) python -m landcover.answer eval $(if $(TOP_K),--top-k $(TOP_K))

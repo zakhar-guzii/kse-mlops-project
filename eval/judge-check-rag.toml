@@ -1,0 +1,200 @@
+# Check of the LLM judge on a retrieval-augmented run (docs/design.md 5.4). Claude (claude-opus-5-5) labelled
+# each answer of the run below by the rubric of prompts/judge.md from the question, the reference answer and
+# the answer, ignoring the line "Sources:", before any per-question verdict of a run of this set was read;
+# Claude had seen the run's printed answer metric and the reviewed labels of the earlier run at top-k 10,
+# whose answers are the same except q25 and q26. The labels were written for the answers of run
+# 31c7400e856a49a8a85baaf4bb802cc2, which are identical to these; that run was repeated because the Mac was
+# swapping during it. The judge's verdicts were copied in afterwards by script; the author reviewed every row.
+run_id = "af9dc5b71a6e4ba7a6a598ef8f4636b9"
+
+[[answers]]
+id = "q01"
+answer = "The class ID for bareland is 0.\n\nSources: [3]"
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q02"
+answer = "A cell value of 255 in the mask marks pixels that are ignored in training and invalid input pixels in the output.\n\nSources: [1], [4]"
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q03"
+answer = "In the export package, sidewalks and parking lots are categorized as examples of `developed space` rather than being merged with the `road` class. Specifically, the documentation notes that while parking lots are considered roads in the OEM labels, the export contract defines `developed space` to include sidewalks and parking lots.\n\nSources: [1], [2], [4]"
+judge = "correct"
+label = "incorrect"
+
+[[answers]]
+id = "q04"
+answer = "The finished result package is available until `accepted_at` + 24 hours, which includes both queue and processing time. For the specific mask, overlay, legend, and JSON metadata, the download link remains valid until the original upload expiry.\n\nSources: [1], [5]"
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q05"
+answer = "Yes, the GeoTIFF mask preserves the source dimensions, CRS, and affine transform.\n\nSources: [1]"
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q06"
+answer = "No, a failed job returns its reason and no partial package.\n\nSources: [2]"
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q07"
+answer = "The Paletted/Unique values render option is the standard for single-band files where a certain color is assigned to each pixel value. This method allows for assigning a color to each unique raster value, and the palette is rendered automatically.\n\nSources: [3, 9]"
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q08"
+answer = "To make the 255 pixels of the mask see-through, you can enter the value 255 in the **From** field and adjust the **Percent Transparent** value in the Transparency Properties of the Raster Properties Dialog. Alternatively, you can use the **Add values from display** button to fetch the pixel values directly from the raster and then enter the transparency value.\n\nSources: [2, 10]"
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q09"
+answer = "I do not know which specific display setting makes the mask look smoother, as the provided documentation does not mention smoothing or anti-aliasing for raster masks.\n\nSources: none"
+judge = "incorrect"
+label = "incorrect"
+
+[[answers]]
+id = "q10"
+answer = "To speed up navigation and performance when viewing high-resolution raster layers, you can build pyramids, which are lower resolution copies of the data that QGIS selects based on the zoom level. You must have write access to the directory where the original data is stored to build them.\n\nSources: [10]"
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q11"
+answer = "To display a four-band image with specific bands as the red, green, and blue components, you should use the Multiband color renderer. With this renderer, you can select three bands from the image to be used as the red, green, or blue components of the color image.\n\nSources: [3]"
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q12"
+answer = "The \"Cumulative count cut\" option removes outliers from the raster rendering. By default, it keeps the standard range of values from 2% to 98%.\n\nSources: [1]"
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q13"
+answer = "No, you should not change the layer's CRS if it is wrong; instead, you should use a reprojection algorithm from Processing or save it as a new dataset to reproject the data.\n\nSources: [1]"
+judge = "incorrect"
+label = "incorrect"
+
+[[answers]]
+id = "q14"
+answer = "Yes, you can use a Raster Attribute Table (RAT) to link raster values or value ranges to descriptive attributes such as class names. These tables are commonly used for classified rasters to help the software interpret how values should be displayed and classified.\n\nSources: [2]"
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q15"
+answer = "A private swimming pool is mapped as water. The documentation specifies that the Water class includes water bodies such as rivers, streams, lakes, sea, ponds, dams, and swimming pools.\n\nSources: [1]"
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q16"
+answer = "Grass and shrubs in gardens, parks, and golf courses are included in the Rangeland class.\n\nSources: [1]"
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q17"
+answer = "I do not know if packed dirt in a yard is specifically classified as bare ground or a paved, built-up surface based on the provided passages. The documentation defines \"Bareland\" as natural areas covered by sand or rocks without vegetation and \"Developed space\" as including artificial grass areas and construction sites, but it does not explicitly mention packed dirt in a yard.\n\nSources: none"
+judge = "incorrect"
+label = "incorrect"
+
+[[answers]]
+id = "q18"
+answer = "No, for very high-resolution images with a GSD of less than 0.25m, the images were resampled to 0.3m or 0.5m to account for object size and visual interpretability.\n\nSources: [6]"
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q19"
+answer = "The percentage of pixels that were labeled as the same class by two different people was 78%.\n\nSources: [1], [4]"
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q20"
+answer = "The OpenEarthMap benchmark dataset used for training and evaluation consists of a total of 5000 images. These images were divided into training, validation, and test sets with a ratio of 6:1:3, resulting in 3000 training images, 500 validation images, and 1500 test images.\n\nSources: [4]"
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q21"
+answer = "The discrepancy exists because of inconsistencies in class definitions between different datasets. For example, in the Chesapeake Bay land cover map, a construction site is labeled as bareland, whereas the OpenEarthMap labels the same area as developed space.\n\nSources: [5]"
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q22"
+answer = "The agriculture land class is the most challenging for the machine, where it trails behind human annotation by 2.3%.\n\nSources: [1]"
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q23"
+answer = "The French national aerial imagery used in the dataset has a spatial resolution of 0.20 m and includes the Red, Green, Blue, and NIR channels. For the AERIAL_RGBI and SPOT_RGBI modalities specifically, only the Infrared, Red, and Green channels were retained for experiments.\n\nSources: [2], [8]"
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q24"
+answer = "No, the radiometric information for the ORTHO HR® product (which includes R, G, B, and NIR images) cannot be considered a physical measurement of channel reflectance. The radiometry is considered relative rather than a physical measurement.\n\nSources: [10]"
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q25"
+answer = "The documentation does not specify which specific label codes are excluded from training, but it notes that a value weight of 0 in the supervision configuration excludes a class from training.\n\nSources: [6]"
+judge = "incorrect"
+label = "incorrect"
+
+[[answers]]
+id = "q26"
+answer = "To ensure spatial independence between patches, the separation between training and validation sets was performed ROI-wise, ensuring that contiguous patches belonging to the same ROI share the same usage. This approach ensures that both the training and validation sets contain a sufficient number of domains while maintaining spatial independence.\n\nSources: [2]"
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q27"
+answer = "I do not know the specific ground area covered by one 512 by 512 tile of the French national aerial imagery. While the FLAIR-HUB dataset covers 2528 km² of France and includes 512×512 patches, the specific ground area for a single tile is not provided.\n\nSources: none"
+judge = "incorrect"
+label = "incorrect"
+
+[[answers]]
+id = "q28"
+answer = "The land cover classification for the dataset, which covers 2,528 km² of France, consists of 19 classes ranging from 0 to 18.\n\nSources: [1], [2]"
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q29"
+answer = "The imagery type code CNIR stands for Color Near Infrared (CNIR).\n\nSources: [1]"
+judge = "correct"
+label = "correct"
+
+[[answers]]
+id = "q30"
+answer = "I do not know which part of the file names for US agricultural aerial tiles gives the date the photo was taken, as the provided passages do not contain information regarding the naming convention for US agricultural aerial tiles.\n\nSources: none"
+judge = "incorrect"
+label = "incorrect"
+
+[[answers]]
+id = "q31"
+answer = "I do not know which geodetic reference frames the US agricultural orthoimagery can be mapped in, as the provided passages do not contain this information.\n\nSources: none"
+judge = "incorrect"
+label = "incorrect"
+
+[[answers]]
+id = "q32"
+answer = "If you download the imagery without the compressed option, the results will only return GeoTIFF images.\n\nSources: [9]"
+judge = "correct"
+label = "correct"

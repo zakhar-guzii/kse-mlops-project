@@ -1,0 +1,17 @@
+# Lab 3 retrieval configuration (docs/design.md, Section 5.2). The only copy of these values.
+chunk_size = 600
+chunk_overlap = 100
+embedding_model = "intfloat/multilingual-e5-small"
+embedding_revision = "614241f622f53c4eeff9890bdc4f31cfecc418b3"
+top_k = 10
+
+# Lab 3 text model (make llm-server, make answer-eval). model must equal --alias in the Makefile.
+# The shadow rates are Sonnet 5.5 per million tokens in and out (docs/design.md 6.7); no money is spent.
+[llm]
+base_url = "http://127.0.0.1:8081/v1"
+model = "gemma-4-12b-it-qat-q4_0"
+temperature = 0.0
+max_tokens = 256
+judge_max_tokens = 200
+shadow_usd_per_mtok_in = 2.0
+shadow_usd_per_mtok_out = 10.0
