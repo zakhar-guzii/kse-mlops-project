@@ -4,7 +4,7 @@ Follow [design.md](design.md) and the three specification deltas under [specs/](
 
 ## 1. Dependencies and schema
 
-- [ ] 1.1 Add the group `serve`, the `pytorch-cpu` index, the group-scoped sources and the two conflicts, `prometheus-client` to the project dependencies and `httpx2` to `dev`, as in design Decision 6, and run `uv lock`. Verify `uv export --locked --no-dev --group serve --no-hashes` lists `torch==2.15.0+cpu ; sys_platform != 'darwin'`; `--group nn` and `--group rag` still list `torch==2.15.0` with `nvidia-cudnn-cu13`; `make setup`, `make lint` and `make test` pass; and CI passes on a pushed branch (design Risks, uv version).
+- [x] 1.1 Add the group `serve`, the `pytorch-cpu` index, the group-scoped sources and the two conflicts, `prometheus-client` to the project dependencies and `httpx2` to `dev`, as in design Decision 6, and run `uv lock`. Verify `uv export --locked --no-dev --group serve --no-hashes` lists `torch==2.15.0+cpu ; sys_platform != 'darwin'`; `--group nn` and `--group rag` still list `torch==2.15.0` with `nvidia-cudnn-cu13`; `make setup`, `make lint` and `make test` pass; and CI passes on a pushed branch (design Risks, uv version).
 - [x] 1.2 Add `sql/serving.sql` as in design Decision 4. Verify `psql` applies it twice to a scratch database without error and `\d serving.predictions` shows the columns of the decision.
 
 ## 2. ML service
