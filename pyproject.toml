@@ -6,6 +6,7 @@ dependencies = [
     "joblib==1.6.0",
     "mlflow==3.16.1",
     "numpy==2.5.5",
+    "prometheus-client==0.26.0",
     "psycopg[binary]==3.3.9",
     "rasterio==1.5.2",
     "scikit-image==0.26.0",
@@ -21,6 +22,7 @@ demo = [
 dev = [
     "dvc==3.67.1",
     "dvc-s3==3.3.0",
+    "httpx2==2.16.2",
     "pre-commit==4.7.0",
     "pytest==9.2.0",
     "ruff==0.17.2",
@@ -34,6 +36,30 @@ nn = [
 rag = [
     "sentence-transformers==6.3.0",
 ]
+# Lab 4 service images (docker/serve/Dockerfile): both models on the CPU-only torch build.
+serve = [
+    "segmentation-models-pytorch==0.5.0",
+    "sentence-transformers==6.3.0",
+    "timm==1.0.31",
+    "torch==2.15.0",
+    "torchvision==0.29.2",
+]
+
+# nn and rag keep the PyPI torch, which is the CUDA build on Linux (Colab training).
+[tool.uv]
+conflicts = [
+    [{ group = "serve" }, { group = "nn" }],
+    [{ group = "serve" }, { group = "rag" }],
+]
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", group = "serve" }]
+torchvision = [{ index = "pytorch-cpu", group = "serve" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [tool.pytest.ini_options]
 pythonpath = ["src", "scripts"]

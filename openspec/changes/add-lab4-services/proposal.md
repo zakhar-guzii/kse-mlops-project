@@ -56,7 +56,7 @@ None.
 ## Impact
 
 - New files: `src/landcover/serve_ml.py`, `src/landcover/serve_llm.py`, `sql/serving.sql`, `docker/serve/Dockerfile`, `tests/test_serve_ml.py`, `tests/test_serve_llm.py`.
-- Changed files: `pyproject.toml` and `uv.lock` (group `serve` with the PyTorch CPU index and conflicts with `nn` and `rag`; `prometheus-client` as a project dependency; `httpx` in `dev` for the test client), `Makefile` (target `images`), `docker-compose.yml` (`mlflow:5000` added to `--allowed-hosts`, so a container on the Compose network can reach the registry), `README.md`, `docs/design.md` (Sections 6.2 and 6.3) and the local, ignored `docs/design.uk.md`.
+- Changed files: `pyproject.toml` and `uv.lock` (group `serve` with the PyTorch CPU index and conflicts with `nn` and `rag`; `prometheus-client` as a project dependency; `httpx2` in `dev` for the test client), `Makefile` (target `images`), `docker-compose.yml` (`mlflow:5000` added to `--allowed-hosts`, so a container on the Compose network can reach the registry), `README.md`, `docs/design.md` (Sections 6.2 and 6.3) and the local, ignored `docs/design.uk.md`.
 - Database: a new schema `serving` in `landcover`, created by the ML service. Existing schemas are untouched.
 - Not edited: Sections 5.1 and 6.8 of the design document, which the retrieval index includes, so the index version does not change; `retrieval.toml`; `prompts/`; the registry.
 - Out of scope: Kubernetes manifests, MLflow in the cluster, loading images into Minikube, authentication on MLflow, Prometheus, Grafana, the drift job, the reference statistics, the dark-image threshold value, the replay script, alerts, the one-command bring-up, the Lab 4 scorecard rows, the revision of Sections 5.5, 6.1, 6.6, 6.7, 6.9 and 7.3, and the `lab-4` tag.

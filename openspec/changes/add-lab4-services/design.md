@@ -7,7 +7,7 @@ See proposal.md for the motivation and the decision tables. Current state that s
 - **Registry.** `landcover-segmenter` has version 1 (random forest, 36.9 MB artifact) and version 2 (U-Net, 78.4 MB), and `champion` points to 2. Each version is a pyfunc model whose `Segmenter.load_context` calls `landcover.models.load_predictor(kind, path)`; each stores its own copy of `code/landcover` and a `requirements.txt`. The MLflow server proxies artifacts. In MLflow 3.16.1, `mlflow.models.get_model_info("models:/…@champion")` returns `registered_model_version = None`, while `MlflowClient().get_model_version_by_alias(name, alias).version` returns `"2"`. Downloads through the proxy need `MLFLOW_ENABLE_PROXY_MULTIPART_DOWNLOAD=false`, as in the `Makefile`.
 - **Lab 3 code to reuse.** `retrieval.load_config`, `embedder`, `retrieve`, `check_index`, `index_version`, `documents`, `load_manifest`; `answer.load_llm`, `read_prompt`, `fill`, `passages`, `cited`, `chat`. `answer.server_build` already checks that the server serves the configured model.
 - **Measured inference on the M4 Pro CPU.** U-Net 0.32 s per 512×512 tile with one thread and 0.36 s with two; load about 1 s; peak resident memory of the process 1.5 GB. Random forest 0.15 s per tile on all cores. The 64 training tiles have brightness percentiles p1 63.3, p50 114.4 and p99 220.5.
-- **Packages.** FastAPI 0.165.0, uvicorn 0.54.0 and prometheus-client 0.26.0 are the current releases and are already in `uv.lock` (the first two through `mlflow-skinny`). The FastAPI test client needs `httpx` 0.28.1, which is locked only through the `demo` group. torch 2.15.0 for linux/aarch64 is 483.7 MB from PyPI plus at least 1.4 GB of CUDA wheels; the `+cpu` wheel from `https://download.pytorch.org/whl/cpu` is 170.7 MB. A scratch resolution with the group of Decision 6 locked in 1.4 s and gave `torch==2.15.0+cpu` on Linux for `serve` while `nn` and `rag` kept the PyPI build.
+- **Packages.** FastAPI 0.165.0, uvicorn 0.54.0 and prometheus-client 0.26.0 are the current releases and are already in `uv.lock` (the first two through `mlflow-skinny`). The FastAPI test client of Starlette 1.10 needs `httpx2` (2.16.2, locked through `huggingface-hub`, which only the groups with torch install); plain `httpx` is deprecated there. torch 2.15.0 for linux/aarch64 is 483.7 MB from PyPI plus at least 1.4 GB of CUDA wheels; the `+cpu` wheel from `https://download.pytorch.org/whl/cpu` is 170.7 MB. A scratch resolution with the group of Decision 6 locked in 1.4 s and gave `torch==2.15.0+cpu` on Linux for `serve` while `nn` and `rag` kept the PyPI build.
 - **Local stack.** Compose runs MLflow with `--allowed-hosts=localhost:5001,127.0.0.1:5001,localhost:5000`, so a container that calls `http://mlflow:5000` on the Compose network is refused until `mlflow:5000` is added. A container on Docker Desktop reaches a host service bound to `127.0.0.1` through `host.docker.internal` (checked with a host HTTP server and a curl container), so `make llm-server` stays as it is.
 - **Embedding model.** `intfloat/multilingual-e5-small` at revision `614241f…` holds `model.safetensors` (470.6 MB) next to ONNX, OpenVINO and `pytorch_model.bin` copies of similar size; SentenceTransformer downloads only the files it loads.
 
@@ -130,7 +130,7 @@ Alternative: download on start-up into an emptyDir. Rejected: every pod start wo
 `pyproject.toml` gains:
 
 - `prometheus-client==0.26.0` in the project dependencies;
-- `httpx==0.28.1` in `dev`;
+- `httpx2==2.16.2` in `dev`;
 - a group `serve` with `torch==2.15.0`, `torchvision==0.29.2`, `segmentation-models-pytorch==0.5.0`, `timm==1.0.31` and `sentence-transformers==6.3.0`;
 - `[tool.uv.sources]` mapping `torch` and `torchvision` to an explicit index `pytorch-cpu` (`https://download.pytorch.org/whl/cpu`) for group `serve`;
 - `[tool.uv] conflicts` between `serve` and `nn`, and between `serve` and `rag`.
@@ -146,10 +146,10 @@ Alternative: platform markers selecting the CPU index on Linux. Rejected: Colab 
 `docker/serve/Dockerfile`, multi-stage:
 
 - **`base`**:
-  - starts from `python:3.12.13-slim-trixie` and copies `uv` from `ghcr.io/astral-sh/uv:0.13.9`;
+  - starts from `python:3.12.13-slim-trixie`, installs `libexpat1` (the rasterio wheel links the system expat, which the slim image lacks) and copies `uv` from `ghcr.io/astral-sh/uv:0.13.9`;
   - runs `uv sync --locked --no-dev --group serve --no-install-project` with a cache mount, using only `pyproject.toml` and `uv.lock`;
   - copies the tree and runs `uv sync --locked --no-dev --group serve`;
-  - sets `ARG GIT_COMMIT`, `ENV IMAGE_COMMIT=$GIT_COMMIT`, `LABEL org.opencontainers.image.revision=$GIT_COMMIT`, `ENV OMP_NUM_THREADS=1 MLFLOW_ENABLE_PROXY_MULTIPART_DOWNLOAD=false PYTHONPATH=src`;
+  - sets `ARG GIT_COMMIT`, `ENV IMAGE_COMMIT=$GIT_COMMIT`, `LABEL org.opencontainers.image.revision=$GIT_COMMIT`, `ENV OMP_NUM_THREADS=1 MLFLOW_ENABLE_PROXY_MULTIPART_DOWNLOAD=false MLFLOW_ENABLE_ARTIFACTS_PROGRESS_BAR=false PYTHONPATH=/app/src`; the embedding model is fetched in a separate stage that copies only `retrieval.toml` and `retrieval.py`, so it is not downloaded again for every commit;
   - runs as a non-root user and exposes port 8000.
 - **`ml`** runs `uvicorn landcover.serve_ml:app`.
 - **`llm`** runs the embedding download of Decision 5 and `uvicorn landcover.serve_llm:app`.

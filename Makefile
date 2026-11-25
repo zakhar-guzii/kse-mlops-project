@@ -1,4 +1,4 @@
-.PHONY: setup lint test up down airflow-password data pull-data train import register champion reproduce train-remote retrieval-index retrieval-eval llm-server answer-eval
+.PHONY: setup lint test up down airflow-password data pull-data train import register champion reproduce train-remote retrieval-index retrieval-eval llm-server answer-eval images
 
 # Credentials for DVC and Compose come from the untracked .env (see .env.example).
 -include .env
@@ -113,3 +113,13 @@ llm-server: $(LLAMA_SERVER) $(LLM_FILE)
 # (group rag; refuses a stale index).
 answer-eval:
 	uv run --locked $(if $(TOP_K),--group rag) python -m landcover.answer eval $(if $(TOP_K),--top-k $(TOP_K))
+
+# Lab 4: build both service images from the committed tree, tagged with the full commit SHA.
+# The context is `git archive HEAD`, so uncommitted and ignored files never enter an image;
+# a tree with uncommitted changes to tracked files is refused so no edit is expected in it.
+images:
+	@git diff --quiet HEAD || { echo "uncommitted changes to tracked files; commit them first" >&2; exit 1; }
+	for target in ml llm; do \
+		git archive HEAD | docker build --target $$target --build-arg GIT_COMMIT=$$(git rev-parse HEAD) \
+			-t landcover-$$target:$$(git rev-parse HEAD) -f docker/serve/Dockerfile - || exit 1; \
+	done
