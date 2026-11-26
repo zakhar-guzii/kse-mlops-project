@@ -793,7 +793,7 @@ took 662 s
 |---|---|
 | Cold: clean clone, new Minikube profile, no images or data | **662 s (11 min)** |
 | Repeated on the same commit: nothing built, registered or indexed | 9 s |
-| After a new commit: the last image layer and a new index Job | about 55 s |
+| After a new commit: the last image layer and a new index Job | about 1 minute (61 s) |
 
 The three slowest cold steps are the images (339 s: the base images, the locked packages with the CPU build of torch, and the 471 MB embedding model, all downloaded into Minikube), the data sample (200 s: 192 files from Hugging Face over range requests) and the registry seed (55 s: training and registering two models). The index Job runs during the seed. The Minikube base image was already cached by Docker Desktop. Without it, the first start pulls about 500 MB more.
 

@@ -59,4 +59,4 @@ Out of scope for this change:
 
 ## 7. Integration check
 
-- [ ] 7.1 Run `openspec validate add-lab4-cluster --strict`, `make lint`, `make test` with `TEST_DSN` set and `git diff --check`. Verify all pass and the diff touches no file excluded in the preamble, except `docker/mlflow/Dockerfile` when 3.1 needed the code-132 line.
+- [x] 7.1 Run `openspec validate add-lab4-cluster --strict`, `make lint`, `make test` with `TEST_DSN` set and `git diff --check`. Verify all pass and the diff touches no file excluded in the preamble, except `docker/mlflow/Dockerfile` when 3.1 needed the code-132 line.
