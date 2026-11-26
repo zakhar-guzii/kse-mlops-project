@@ -29,8 +29,9 @@ forward() {  # service, local port, service port
 }
 
 step "minikube"
-minikube start --driver=docker --container-runtime=docker --kubernetes-version=v1.30.0 \
-    --memory="${MINIKUBE_MEMORY:-6144}" --cpus="${MINIKUBE_CPUS:-4}"
+# Only when it is not running: minikube start on a running cluster restarts the node's Docker and every pod.
+minikube status >/dev/null 2>&1 || minikube start --driver=docker --container-runtime=docker \
+    --kubernetes-version=v1.30.0 --memory="${MINIKUBE_MEMORY:-6144}" --cpus="${MINIKUBE_CPUS:-4}"
 
 step "images, built by Minikube's Docker daemon"
 eval "$(minikube docker-env)"
@@ -52,6 +53,7 @@ echo "$manifest" | k apply -l app=postgres -f -
 k rollout status deploy/postgres --timeout=5m
 echo "$manifest" | k apply -f -
 k rollout status deploy/mlflow --timeout=5m
+k wait --for=condition=Ready pod -l app=mlflow --timeout=5m
 
 step "registry"
 forward mlflow 5002 5000

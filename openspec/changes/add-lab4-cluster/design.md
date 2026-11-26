@@ -186,11 +186,11 @@ Alternative: chain `make train`, `make register RUN=…` and `make champion` in 
 `make cluster` runs `scripts/cluster.sh` (bash, `set -euo pipefail`) with the variables of `.env` exported by the Makefile, plus `MINIKUBE_MEMORY ?= 6144` and `MINIKUBE_CPUS ?= 4`. The steps are too many for a readable recipe, and a script can own its port-forwards with one `trap`. `KUBECTL="minikube kubectl --"`.
 
 1. Fail unless `.env` exists ("cp .env.example .env"). Fail if `git diff --quiet HEAD` fails, so the tree matches the images.
-2. `minikube start --driver=docker --container-runtime=docker --kubernetes-version=v1.30.0 --memory=$MINIKUBE_MEMORY --cpus=$MINIKUBE_CPUS`. On a running profile this returns in seconds.
+2. Unless `minikube status` succeeds, `minikube start --driver=docker --container-runtime=docker --kubernetes-version=v1.30.0 --memory=$MINIKUBE_MEMORY --cpus=$MINIKUBE_CPUS`. On a running cluster `minikube start` restarts the node's Docker and every pod (observed: `SandboxChanged`, PostgreSQL and MLflow restarted, `rollout status` still reporting success while MLflow was starting), so it is skipped.
 3. `eval "$(minikube docker-env)"`; `make images`; build the MLflow image.
 4. `make sample`.
 5. Create the Secret and `postgres-init`. Apply only the PostgreSQL objects of the substituted manifest (`kubectl apply -l app=postgres`) and wait for `rollout status`, so MLflow and the index Job never start before the first `initdb` has created their databases.
-6. Apply the whole manifest and wait for `rollout status` of `mlflow`.
+6. Apply the whole manifest, wait for `rollout status` of `mlflow` and for its pod to be Ready.
 7. Port-forward `svc/mlflow` to `127.0.0.1:5002`, wait for `/health`, then run `MLFLOW_TRACKING_URI=http://127.0.0.1:5002 uv run --locked python -m landcover.tracking seed`.
 8. `kubectl wait --for=condition=complete job/retrieval-index-<commit> --timeout=10m`.
 9. `rollout status deploy/ml --timeout=5m`. Port-forward `svc/ml` to 8000. Run `uv run --locked python scripts/smoke.py predict --ml http://127.0.0.1:8000 --mlflow http://127.0.0.1:5002 --commit <sha>`.
