@@ -64,7 +64,7 @@ These belong to `add-lab4-drift-alert`. Also out of scope:
   - `make cluster` exits 0, prints the Grafana and Prometheus commands, and its last lines list the monitoring pods as ready;
   - a second run sends no reference request, keeps 64 labels and builds no layer;
   - no port-forward process remains after it exits (`pgrep -f port-forward`).
-- [ ] 4.2 Clean-clone run: clone the pushed branch into the scratchpad, `cp .env.example .env`, ask the author before `minikube delete`, then `time make cluster`. Verify it exits 0 with the monitoring components ready and the reference built. Record the cold and warm durations in the README's bring-up block, replacing the earlier numbers.
+- [x] 4.2 Clean-clone run: clone the pushed branch into the scratchpad, `cp .env.example .env`, ask the author before `minikube delete`, then `time make cluster`. Verify it exits 0 with the monitoring components ready and the reference built. Record the cold and warm durations in the README's bring-up block, replacing the earlier numbers.
 - [x] 4.3 Update the README "Lab 4: cluster" bring-up list for the new steps and the port-forwards. Verify every changed command runs as written.
 
 ## 5. Evidence and documents
@@ -86,7 +86,7 @@ These belong to `add-lab4-drift-alert`. Also out of scope:
   - the screenshot and the report of 5.2.
 
   Replace the pods-and-services capture of "Lab 4: cluster" and remove its sentence "The monitoring components join this list in the next part of Lab 4". Verify every command in the section runs as written on the current commit.
-- [ ] 5.4 Revise Section 6.6 and the same passages in the local `docs/design.uk.md` (design Decision 12). Verify:
+- [x] 5.4 Revise Section 6.6 and the same passages in the local `docs/design.uk.md` (design Decision 12). Verify:
   - `grep -n "PSI\|Population Stability\|10 percentage points\|histogram bin" docs/design.md` finds no PSI or 10-point rule and no histogram bins in Section 6.6, only the probe's comparison that names PSI as the rejected test;
   - the section names the metrics, the test, the provisional threshold, the schedule and window, the reference, the labels and the freshness signal;
   - `git check-ignore docs/design.uk.md` succeeds;

@@ -23,7 +23,7 @@ Lab 3 adds the GIS assistant's documentation answers: a versioned retrieval inde
 | Services containerized | `make images` builds both images from `git archive HEAD`, tagged with the full commit, and refuses uncommitted changes ([Build](#build)) | Lab 4 |
 | Services deployed with health contracts | Both services, MLflow and PostgreSQL ready on Minikube ([Pods and services](#pods-and-services)); with the alias missing the ML pod stays 0/1 and out of the Service's endpoints ([Missing model in the cluster](#missing-model-in-the-cluster)); a promotion and a restart change the reported version with the same image ([Promotion in the cluster](#promotion-in-the-cluster)) | Lab 4 |
 | Monitoring scheduled | A CronJob reports every 5 minutes: drift of the served window against the training reference per input feature and predicted class share, mean IoU on labelled quadrants, insufficient data and data age, pushed to Prometheus; the Grafana dashboard from the repository shows two windows ([Lab 4: monitoring](#lab-4-monitoring), [Two windows](#two-windows)) | Lab 4 |
-| One command brings the system up | `make cluster` from a clean clone starts Minikube, deploys every component, seeds the registry and passes a smoke request to `/predict` in 11 minutes cold and 9 s repeated ([Bring-up](#bring-up)) | Lab 4 |
+| One command brings the system up | `make cluster` from a clean clone starts Minikube, deploys every component, seeds the registry, passes a smoke request to `/predict` and deploys the monitoring components in 8 minutes cold and 13 s repeated ([Bring-up](#bring-up)) | Lab 4 |
 
 ## Lab 1 status
 
@@ -766,39 +766,48 @@ The command:
 
 When `make llm-server` is running on the host, the command also waits for the LLM service and asks it one question. Otherwise it says why the LLM service cannot be ready and still succeeds.
 
-The cold run from a clean clone, with a new Minikube profile and no images in it, at commit `3984c35` (build, download and apply lines left out):
+The cold run from a clean clone (`cp .env.example .env`), with a new Minikube profile and no images in it, at commit `dcd039c` (build, download and apply lines left out):
 
 ```text
 == minikube (at 0 s)
 == images, built by Minikube's Docker daemon (at 20 s)
-== data sample (at 359 s)
-== manifests (at 559 s)
+== data sample (at 153 s)
+== manifests (at 364 s)
 deployment "postgres" successfully rolled out
 deployment "mlflow" successfully rolled out
-pod/mlflow-6cc95db77b-2j9cc condition met
-== registry (at 586 s)
-run 7fecc834fd8846b6902310d78aadc588: development mIoU 0.0456 (recorded 0.0456)
-landcover-segmenter version 1: run 7fecc834fd8846b6902310d78aadc588, data_version 6a0c8cc2708d6616c0bfb9f3f5095708.dir, git_commit 3984c35cb0801116d75df783a44ebeacbd4c715a; predicted a 512x512 mask
-run fccdc33e12a44b539e8a6d0f69c65c24: development mIoU 0.1478 (recorded 0.1478)
-landcover-segmenter version 2: run fccdc33e12a44b539e8a6d0f69c65c24, data_version 6a0c8cc2708d6616c0bfb9f3f5095708.dir, git_commit 3984c35cb0801116d75df783a44ebeacbd4c715a; predicted a 512x512 mask
+pod/mlflow-6cc95db77b-mff67 condition met
+== registry (at 390 s)
+run 1c83ec71c1bd4fd18bd95d264f56de7f: development mIoU 0.0456 (recorded 0.0456)
+landcover-segmenter version 1: run 1c83ec71c1bd4fd18bd95d264f56de7f, data_version 6a0c8cc2708d6616c0bfb9f3f5095708.dir, git_commit dcd039cf598bfbb28c7649a8292fdbe975939b42; predicted a 512x512 mask
+run ed4a6ebc1d3d49279ba9af971d8b9d45: development mIoU 0.1478 (recorded 0.1478)
+landcover-segmenter version 2: run ed4a6ebc1d3d49279ba9af971d8b9d45, data_version 6a0c8cc2708d6616c0bfb9f3f5095708.dir, git_commit dcd039cf598bfbb28c7649a8292fdbe975939b42; predicted a 512x512 mask
 landcover-segmenter@champion -> version 2
-== retrieval index (at 641 s)
-job.batch/retrieval-index-3984c35cb0801116d75df783a44ebeacbd4c715a condition met
-== ML service (at 641 s)
+== retrieval index (at 444 s)
+job.batch/retrieval-index-dcd039cf598bfbb28c7649a8292fdbe975939b42 condition met
+== ML service (at 444 s)
 deployment "ml" successfully rolled out
-smoke /predict: landcover-segmenter version 2 (champion), image 3984c35cb0801116d75df783a44ebeacbd4c715a
-== LLM service (at 662 s)
+smoke /predict: landcover-segmenter version 2 (champion), image dcd039cf598bfbb28c7649a8292fdbe975939b42
+== drift reference and labels (at 455 s)
+reference of version 2: 256 quadrants sent, 256 in all
+labels: 64 quadrants of D017-2021, 64 in the table
+== monitoring (at 475 s)
+deployment "pushgateway" successfully rolled out
+deployment "prometheus" successfully rolled out
+deployment "grafana" successfully rolled out
+== LLM service (at 475 s)
 llm not ready: no text model server on 127.0.0.1:8081 (make llm-server)
-took 662 s
+dashboard: minikube kubectl -- port-forward svc/grafana 3000:3000, then http://127.0.0.1:3000/d/landcover
+metrics:   minikube kubectl -- port-forward svc/prometheus 9090:9090, then http://127.0.0.1:9090
+took 475 s
 ```
 
 | Run | Duration |
 |---|---|
-| Cold: clean clone, new Minikube profile, no images or data | **662 s (11 min)** |
-| Repeated on the same commit: nothing built, registered or indexed | 9 s |
-| After a new commit: the last image layer and a new index Job | about 1 minute (61 s) |
+| Cold: clean clone, new Minikube profile, no images or data | **475 s (8 min)** |
+| Repeated on the same commit: nothing built, registered, indexed or sent for the reference | 13 s |
+| After a new commit: the last image layers and a new index Job | about 1 minute (60 s) |
 
-The three slowest cold steps are the images (339 s: the base images, the locked packages with the CPU build of torch, and the 471 MB embedding model, all downloaded into Minikube), the data sample (200 s: 192 files from Hugging Face over range requests) and the registry seed (55 s: training and registering two models). The index Job runs during the seed. The Minikube base image was already cached by Docker Desktop. Without it, the first start pulls about 500 MB more.
+The three slowest cold steps are the data sample (211 s: 192 files from Hugging Face over range requests), the images (133 s: the base images, the locked packages with the CPU build of torch, the 471 MB embedding model and the drift job's Evidently, all downloaded into Minikube) and the registry seed (54 s: training and registering two models). The index Job runs during the seed, and the monitoring images are pulled while the earlier steps run. The drift reference of the random forest takes 20 s. The Minikube base image was already cached by Docker Desktop. Without it, the first start pulls about 500 MB more. The first cold run, at commit `3984c35` before the monitoring components, took 662 s, mostly because its image step downloaded more (339 s).
 
 A run on a new commit deploys the new images and builds the index again with a Job named after the commit. Completed Jobs of earlier commits stay listed; `kubectl delete job -l app=retrieval-index` removes them. PostgreSQL takes its password from `.env` only on the first start of its volume. After changing `POSTGRES_PASSWORD`, run `minikube delete` before `make cluster`. `minikube stop` keeps the cluster, the registry and the index for the next `make cluster`; `minikube delete` removes all of them.
 
