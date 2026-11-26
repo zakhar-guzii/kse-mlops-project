@@ -95,7 +95,7 @@ These belong to `add-lab4-drift-alert`. Also out of scope:
 
 ## 6. Integration check
 
-- [ ] 6.1 On the final commit, run `make lint`, `make test` and `uv run --locked --group monitor pytest -q tests/test_monitor.py`. Then run `openspec validate add-lab4-monitoring --strict`. Verify all pass, and that `kubectl get pods,svc` in the README matches a fresh capture: same components, all ready.
+- [x] 6.1 On the final commit, run `make lint`, `make test` and `uv run --locked --group monitor pytest -q tests/test_monitor.py`. Then run `openspec validate add-lab4-monitoring --strict`. Verify all pass, and that `kubectl get pods,svc` in the README matches a fresh capture: same components, all ready.
 
 ## Workflow follow-up
 
