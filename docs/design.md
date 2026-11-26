@@ -465,7 +465,7 @@ The mean-load formula does not determine p95 completion time. A load test measur
 Replay twice the peak arrival rate for an hour. Record p95 completion time and queue wait. If the measured p95 completion time exceeds 5 minutes, first try ONNX Runtime or larger tiles. Then try more workers within the cost ceiling and the four-worker limit. Consider relaxing the target only after these steps.
 **Course service (Lab 4).** The course serves synchronous single-image requests: `POST /predict` takes one image of at most 1024×1024 pixels and 16 MiB and returns its mask in the same response. Without tiling, a larger image is refused. One process serves one request at a time; more throughput means more replicas.
 
-In the container (`OMP_NUM_THREADS=1`), the first 512×512 tile after start-up took 1.6 s and a 1024×1024 image 6.8 s, at a container memory peak of 969 MiB and 1,145 MiB. A warm U-Net takes 0.32 s per 512×512 tile on the Mac's CPU.
+In the container (`OMP_NUM_THREADS=1`), the first 512×512 tile after start-up took 1.6 s and a 1024×1024 image 6.8 s, at a container memory peak of 969 MiB and 1,145 MiB. A warm U-Net takes 0.32 s per 512×512 tile on the Mac's CPU. Deployed on Minikube, a warm 512×512 request takes 1.33 s at p50 and 1.42 s at p95, and a 1024×1024 one 6.09 s and 6.32 s; two concurrent clients get no more throughput than one (Section 7.3). A switch to batch serving would change the monitoring unit from requests in a 5-minute window to batch runs: the report would compare each run's images with the reference after the run, and data age would become the time since the last run.
 
 The queue, workers, leases, retries, tiling and stitching above remain the product design and are not built in the course.
 
@@ -544,7 +544,7 @@ Between the training and the held-out quadrants, the input features lie 0.32–0
 
 Readiness checks that the model is loaded, not that a prediction succeeds; a service that loads its model and then fails every image stays ready, and `PredictErrors` catches it from the request counter. `invalid` uploads are the client's input and do not count. When the job runs but nothing was served, `DataStale` fires and `DriftReportStale` does not. No rule trains, changes an alias or restarts a service. The example in Section 6.8, a brightness PSI of 0.31, predates this rule; the deployed system uses the normed Wasserstein distance above.
 
-**Demonstration.** `make drift-demo` sends the 128 held-out quadrants unchanged into one 5-minute window and the next window's 128 with 64 of them (seed 0) darkened by 0.5 on the red, green and blue bands; the fourth band, which carries validity, is unchanged. The reports gave brightness 0.322 and then 0.631; `BrightnessDrift` fired 15 s after the second report and resolved after the next one, and the served model version did not change (README, Lab 4: drift alert).
+**Demonstration.** `make drift-demo` sends the 128 held-out quadrants unchanged into one 5-minute window and the next window's 128 with 64 of them (seed 0) darkened by 0.5 on the red, green and blue bands; the fourth band, which carries validity, is unchanged. The reports gave brightness 0.322 and then 0.631. `BrightnessDrift` was active 16 s after the shifted window ended, its email reached the mailbox 5 min 46 s after that window started, the alert resolved after the next report, and the served model version did not change. A second shifted replay with the same seed gave the same distances (README, Lab 4: drift alert).
 
 Prometheus scrapes the services' `/metrics` and the Pushgateway, which holds one group per report. The group has:
 
@@ -619,6 +619,8 @@ The calculator is $2.27 below the listed-rate steady-month total because it omit
 One answer at the chosen top-k uses about a third of the 6,400 input tokens and a sixteenth of the 800 output tokens budgeted per model call above, so the assistant task of five calls has room for its conversation and tool results; the monthly totals are left unchanged. Local inference costs no money, keeps the questions on the Mac and needs no account, but takes about 11 s per answer and a server footprint of 8,638 MB on the Mac; an API moves the prompt evaluation to the provider and offers a stronger model for about half a cent per answer here, and sends the question to the provider, which matters little for questions about a public corpus. The course keeps local inference; the cloud design keeps Bedrock (Section 6.2).
 
 **Lab 4 serving.** The text model stays outside the cluster on the Mac host, so the course serving path still costs $0 per request; the LLM service in Minikube calls it over HTTP. On the 24 GiB Mac the cluster gets priority: Minikube receives 6 GB (more than the lab's 4 GB, leaving room for the monitoring of Lab 4), the server's prompt cache is capped at 2 GiB, and the Compose stack is stopped while the cluster runs. The consequences are a smaller cache for repeated prompts, which the Lab 3 runs barely reused, and pages of the model file that macOS may drop and read again under pressure. A GPU machine or an API would free the server's 2–8 GB of the Mac at the per-token price above.
+
+**Lab 4 alerting.** Alertmanager and Mailpit are open-source images in the cluster and cost $0; they peaked at 30 MiB and 54 MiB (Section 7.3). The mailbox needs no account and no secret, so the reviewer's bring-up delivers mail too. The cloud design keeps SES for the operator's email at the rate in the table above.
 
 ## 6.8 Integration points
 
@@ -730,9 +732,33 @@ Model `gemma-4-12b-it-qat-q4_0`, llama-server build `b12359-b1b770d90`, plain pr
 
 By the rule of Section 5.4, the smallest k within two questions of the best, the chosen top-k is 10: 25 of 32 against 21 at k = 5 and 15 at k = 3. It is the value in `retrieval.toml` that Lab 4 serves, at the cost of a p50 of 10.7 s against 6.9 s at k = 5. Every answer that names no passage was judged incorrect. The four rows replace runs `8fe988ff4fa94f2d956a189fb9015b8d`, `1d13c9db9d0c46b29ef62243f770290d`, `1591a97b45fc4e6c910919598a964051` and `01551e9c8bdf43fc956a149c57f773c3` (15, 15, 19 and 25 of 32) on set `d06b7a39c631` with judge prompt `5b291def62c3`. The first run at top-k 10 on the revised set, `31c7400e856a49a8a85baaf4bb802cc2`, gave the same answers and verdicts; it was repeated because the Mac was swapping during it, which put its p95 at 27.70 s.
 
-## 7.3 Placeholder
+## 7.3 Performance benchmarks
 
-Lab 4 fills this section with deployed throughput, p50 and p95 latency and resource measurements.
+Measured on Minikube (6 GiB, 4 CPUs) on the M4 Pro with `scripts/bench.py` at commit `1aac05b`, the U-Net (version 3) serving, `OMP_NUM_THREADS=1` in the ML pod, 5 warm-up and 30 measured requests per input (README, Lab 4: benchmarks):
+
+| Request | p50 | p95 | Throughput |
+|---|---|---|---|
+| `/predict` 256×256 | 0.331 s | 0.356 s | 3.01 requests/s |
+| `/predict` 512×512 | 1.332 s | 1.415 s | 0.75 requests/s |
+| `/predict` 1024×1024 | 6.091 s | 6.315 s | 0.16 requests/s |
+| `/predict` 512×512, 2 concurrent clients | 2.767 s | 2.806 s | 0.72 requests/s |
+| `/ask`, top-k 10, first 10 evaluation questions | 8.93 s | 12.44 s | sequential |
+
+The time grows with the pixel count, about 1.3 s per 512×512 tile on one thread. Two clients do not add throughput: one process serves one request at a time (Section 6.3), so more throughput needs replicas, each with the ML pod's memory. Prometheus' `histogram_quantile(0.95)` over the same requests gave 9.13 s against 6.15 s measured, because the latency buckets jump from 5 s to 10 s; the dashboard's p95 is a coarse view, and a finer bucket layout around 0.25–8 s would make it usable for an SLO. `/ask` matches the Lab 3 measurement at top-k 10 (Section 6.3): the time is the text model's prompt evaluation on the host.
+
+| Pod | `memory.peak` | Limit |
+|---|---|---|
+| ml (U-Net, after the 1024×1024 runs) | 1,396 MiB | 2 GiB |
+| llm | 876 MiB | 1.5 GiB |
+| grafana | 769 MiB | 768 MiB, file cache reclaimed at the limit |
+| mlflow | 505 MiB | 1 GiB |
+| postgres | 131 MiB | 512 MiB |
+| prometheus | 68 MiB | 256 MiB |
+| mailpit | 54 MiB | 128 MiB |
+| pushgateway | 38 MiB | 64 MiB |
+| alertmanager | 30 MiB | 64 MiB |
+
+If p95 doubled tomorrow, three causes would show in different places. CPU starvation, from another pod or the host, shows as `process_cpu_seconds_total` of the ML pod rising more slowly than the wall clock during requests. Memory pressure shows as `process_resident_memory_bytes` near the 2 GiB limit, or as restarts of the pod. A change in the inputs or the model shows in the request log: the `width` and `height` of the served images and the `model_version` of the slow requests.
 
 ## 7.4 Milestones
 

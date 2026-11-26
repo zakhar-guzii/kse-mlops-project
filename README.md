@@ -21,9 +21,10 @@ Lab 3 adds the GIS assistant's documentation answers: a versioned retrieval inde
 | Prompts versioned | Each prompt is a file in [prompts/](prompts/), and every run of `landcover-answers` carries its `prompt_hash` and `judge_prompt_hash`, the first 12 hex digits of the file's SHA-256 ([Lab 3: LLM baseline](#lab-3-llm-baseline)) | Lab 3 |
 | Cost and latency recorded | Every answer run logs tokens in and out, a shadow cost, compute seconds and p50/p95 latency; the columns of the [answer table](#lab-3-retrieval-augmented-answers) give them per run | Lab 3 |
 | Services containerized | `make images` builds both images from `git archive HEAD`, tagged with the full commit, and refuses uncommitted changes ([Build](#build)) | Lab 4 |
-| Services deployed with health contracts | Both services, MLflow and PostgreSQL ready on Minikube ([Pods and services](#pods-and-services)); with the alias missing the ML pod stays 0/1 and out of the Service's endpoints ([Missing model in the cluster](#missing-model-in-the-cluster)); a promotion and a restart change the reported version with the same image ([Promotion in the cluster](#promotion-in-the-cluster)) | Lab 4 |
-| Monitoring scheduled | A CronJob reports every 5 minutes: drift of the served window against the training reference per input feature and predicted class share, mean IoU on labelled quadrants, insufficient data and data age, pushed to Prometheus; the Grafana dashboard from the repository shows two windows ([Lab 4: monitoring](#lab-4-monitoring), [Two windows](#two-windows)) | Lab 4 |
-| One command brings the system up | `make cluster` from a clean clone starts Minikube, deploys every component, seeds the registry, passes a smoke request to `/predict` and deploys the monitoring components in 8 minutes cold and 13 s repeated ([Bring-up](#bring-up)) | Lab 4 |
+| Services deployed with health contracts | Both services, MLflow, PostgreSQL and the monitoring and alerting components ready on Minikube ([Pods and services](#pods-and-services)); with the alias missing the ML pod stays 0/1 and out of the Service's endpoints ([Missing model in the cluster](#missing-model-in-the-cluster)); a promotion and a restart change the reported version with the same image ([Promotion in the cluster](#promotion-in-the-cluster)) | Lab 4 |
+| Monitoring scheduled | A CronJob reports every 5 minutes: drift of the served window against the training reference per input feature and predicted class share, mean IoU on labelled quadrants, insufficient data and data age, pushed to Prometheus; the Grafana dashboard from the repository shows two windows ([Lab 4: monitoring](#lab-4-monitoring), [Two windows](#two-windows)). Prometheus evaluates five alert rules on the report, data and job freshness and service health, checked by `promtool` against synthetic series; Alertmanager emails every alert to the operator's mailbox in Mailpit ([Rules](#rules), [Channel](#channel), [Checking the rules](#checking-the-rules)) | Lab 4 |
+| One command brings the system up | `make cluster` from a clean clone starts Minikube, deploys every component, seeds the registry, passes a smoke request to `/predict` and deploys the monitoring and alerting components, with the mailbox address printed, in 8 minutes cold and 13 s repeated; a repeated run leaves Prometheus, Alertmanager and the mailbox untouched ([Bring-up](#bring-up)) | Lab 4 |
+| Drift signal reaches a human | `make drift-demo` darkens 64 of 128 held-out quadrants by 0.5 through `/predict` ([The shift](#the-shift)); the brightness distance goes from 0.322 to 0.631 against the threshold 0.5 on the dashboard, and `BrightnessDrift` lands in the operator's mailbox 5 min 46 s after the shifted window started, with the model unchanged ([Demonstration](#demonstration), [Grafana](docs/screenshots/grafana-drift-alert.png), [email](docs/screenshots/mailpit-drift-alert.png)) | Lab 4 |
 
 ## Lab 1 status
 
@@ -757,12 +758,12 @@ The command:
 - starts Minikube (Kubernetes 1.30.0, docker driver and runtime, `MINIKUBE_MEMORY=6144` and `MINIKUBE_CPUS=4` by default) unless it is running;
 - builds the two service images and the drift job image of `HEAD` and the MLflow image of [docker/mlflow](docker/mlflow) with Minikube's Docker daemon;
 - runs `make sample`;
-- applies [k8s/landcover.yaml](k8s/landcover.yaml) with the ConfigMaps (including [k8s/prometheus.yml](k8s/prometheus.yml) and [k8s/grafana/](k8s/grafana/)), a Secret built from `.env` and the commit in the image tags;
+- applies [k8s/landcover.yaml](k8s/landcover.yaml) with the ConfigMaps (including [k8s/prometheus.yml](k8s/prometheus.yml) with [k8s/alerts.yml](k8s/alerts.yml), [k8s/alertmanager.yml](k8s/alertmanager.yml) and [k8s/grafana/](k8s/grafana/)), a Secret built from `.env`, the commit in the image tags and a hash of the Prometheus and Alertmanager configuration in their pod templates;
 - seeds an empty registry: the majority-class rule as version 1 and the random forest as version 2, `champion` on 2;
 - waits for the retrieval index Job and the ML service;
 - sends a smoke request to `/predict` ([scripts/smoke.py](scripts/smoke.py)). The request fails unless the response reports the champion's version and the deployed commit;
 - builds the drift reference of the served version and loads the development labels ([Lab 4: monitoring](#lab-4-monitoring)); both do nothing when already in place;
-- waits for Prometheus, the Pushgateway and Grafana, and prints the port-forward commands of the dashboard and Prometheus.
+- waits for Prometheus, the Pushgateway, Grafana, Alertmanager and Mailpit, and prints the port-forward commands of the dashboard, Prometheus and the mailbox.
 
 When `make llm-server` is running on the host, the command also waits for the LLM service and asks it one question. Otherwise it says why the LLM service cannot be ready and still succeeds.
 
@@ -827,35 +828,38 @@ The ConfigMap `landcover` holds the tracking address (`http://mlflow:5000`), the
 
 ### Pods and services
 
-With `make llm-server` running, the monitoring components deployed and the drift reports of [Two windows](#two-windows) done:
+At commit `1aac05b`, with `make llm-server` running, the monitoring and alerting components deployed and the drift demonstration and benchmarks of [Lab 4: drift alert](#lab-4-drift-alert) done:
 
 ```text
 $ kubectl get pods,svc
 NAME                                                                 READY   STATUS      RESTARTS   AGE
-pod/drift-report-29928555-88fs9                                      0/1     Error       0          27m
-pod/drift-report-29928570-fvf7x                                      0/1     Completed   0          12m
-pod/drift-report-29928575-pb2qt                                      0/1     Completed   0          7m59s
-pod/drift-report-29928580-njdhw                                      0/1     Completed   0          2m59s
-pod/grafana-87df95659-nr5jr                                          1/1     Running     0          21m
-pod/llm-646cd5f99b-cdhc9                                             1/1     Running     0          43m
-pod/ml-57b474875f-pptfp                                              1/1     Running     0          43m
-pod/mlflow-67bd658488-r9xww                                          1/1     Running     0          43m
-pod/postgres-875f46476-p6qv9                                         1/1     Running     0          3h6m
-pod/prometheus-855c48cf6c-dkp2p                                      1/1     Running     0          21m
-pod/pushgateway-5664486c87-q99wt                                     1/1     Running     0          27m
-pod/retrieval-index-3984c35cb0801116d75df783a44ebeacbd4c715a-kqrxk   0/1     Completed   0          3h5m
-pod/retrieval-index-64b5ff6a9ddc25cccb83b88702c39fdada546e8c-m8mrh   0/1     Completed   0          177m
-pod/retrieval-index-be7e975db7c98e776855b500c99fc5cbc064794d-fbsng   0/1     Completed   0          42m
+pod/alertmanager-5b97ff6c8f-r5qcq                                    1/1     Running     0          45m
+pod/drift-report-29928805-t6qbj                                      0/1     Completed   0          10m
+pod/drift-report-29928810-v5zdw                                      0/1     Completed   0          5m56s
+pod/drift-report-29928815-f2scr                                      0/1     Completed   0          56s
+pod/grafana-87df95659-qwqqt                                          1/1     Running     0          3h38m
+pod/llm-64ff6d8c67-28bds                                             1/1     Running     0          53m
+pod/mailpit-744c57ffcc-wc4rc                                         1/1     Running     0          53m
+pod/ml-858df48cf5-zqr2m                                              1/1     Running     0          45m
+pod/mlflow-584546d79f-6czdx                                          1/1     Running     0          3h35m
+pod/postgres-875f46476-s8wrs                                         1/1     Running     0          3h38m
+pod/prometheus-6cd57c7598-bgfsf                                      1/1     Running     0          53m
+pod/pushgateway-5664486c87-d6lb6                                     1/1     Running     0          3h38m
+pod/retrieval-index-1aac05bca633ef1a2612ff69562810371d6fd689-nt7d6   0/1     Completed   0          53m
+pod/retrieval-index-62736bf0303dbe212542aed4953e61c87296f744-7gjh8   0/1     Completed   0          3h31m
+pod/retrieval-index-dcd039cf598bfbb28c7649a8292fdbe975939b42-xm29w   0/1     Completed   0          3h38m
 
-NAME                  TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)    AGE
-service/grafana       ClusterIP   10.103.39.192    <none>        3000/TCP   140m
-service/kubernetes    ClusterIP   10.96.0.1        <none>        443/TCP    3h15m
-service/llm           ClusterIP   10.105.138.220   <none>        8000/TCP   3h5m
-service/ml            ClusterIP   10.105.253.89    <none>        8000/TCP   3h5m
-service/mlflow        ClusterIP   10.106.187.93    <none>        5000/TCP   3h5m
-service/postgres      ClusterIP   10.106.23.16     <none>        5432/TCP   3h6m
-service/prometheus    ClusterIP   10.103.248.190   <none>        9090/TCP   140m
-service/pushgateway   ClusterIP   10.107.29.174    <none>        9091/TCP   140m
+NAME                   TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)             AGE
+service/alertmanager   ClusterIP   10.97.203.202    <none>        9093/TCP            53m
+service/grafana        ClusterIP   10.98.188.77     <none>        3000/TCP            3h38m
+service/kubernetes     ClusterIP   10.96.0.1        <none>        443/TCP             3h44m
+service/llm            ClusterIP   10.111.166.246   <none>        8000/TCP            3h38m
+service/mailpit        ClusterIP   10.97.149.94     <none>        1025/TCP,8025/TCP   53m
+service/ml             ClusterIP   10.111.10.211    <none>        8000/TCP            3h38m
+service/mlflow         ClusterIP   10.105.91.201    <none>        5000/TCP            3h38m
+service/postgres       ClusterIP   10.103.208.144   <none>        5432/TCP            3h38m
+service/prometheus     ClusterIP   10.97.231.185    <none>        9090/TCP            3h38m
+service/pushgateway    ClusterIP   10.98.252.165    <none>        9091/TCP            3h38m
 ```
 
 The report Jobs and their pods are in [Lab 4: monitoring](#lab-4-monitoring).
@@ -1150,6 +1154,84 @@ kubectl port-forward svc/alertmanager 9093:9093 &   # http://127.0.0.1:9093
 curl -s 127.0.0.1:9090/api/v1/alerts                # active alerts, with the Prometheus port-forward
 ```
 
+### The shift
+
+`make drift-demo` sends the 128 held-out quadrants unchanged into one 5-minute window, then the same 128 into the next window with 64 of them darkened. `python -m landcover.monitor replay --darken 0.5 --fraction 0.5 --seed 0` picks the 64 with a fixed seed and multiplies their red, green and blue bands by 0.5 with numpy. It leaves band 4, which carries validity, unchanged, and sends them with `shift/<batch>/<tile>/q<n>` source IDs, so the request log tells which rows were darkened. The shift goes through `/predict` like any upload.
+
+A probe outside the cluster, with the service's own feature code and the saved models, chose the shift and the threshold (design Section 6.6):
+
+| Traffic | Brightness distance |
+|---|---|
+| Unchanged held-out quadrants | 0.322 on both models |
+| No-shift halves of the training tiles, 2,000 splits | median 0.22, p95 0.435; P(≥ 0.5) = 1.9% |
+| One training batch against the other three | D080 0.31, D045 0.31, D033 0.70, D065 1.59 |
+| Darkening ×0.5 of 50% of the held-out quadrants, 50 seeds | 0.574–0.62 |
+| Darkening ×0.7 or ×0.8 of 30% | 0.14–0.22, not detected |
+| Brightening ×1.5 of 30% | 0.62–0.66 |
+
+### Demonstration
+
+On the author's cluster (`champion` on the U-Net, version 3, commit `1aac05b`), with the port-forwards of [Channel](#channel) and the ML one on 8000. `kubectl` is the alias of [Lab 4: monitoring](#lab-4-monitoring), `POSTGRES_USER` comes from `.env` (`set -a; . ./.env; set +a`), and the CronJob keeps only its last three Jobs, so the Job names are those of this run:
+
+```text
+$ make drift-demo
+uv run --locked python -m landcover.monitor replay --ml http://127.0.0.1:8000
+waiting for the window that starts at 20:55 UTC
+128 ok, window 20:55-21:00 UTC, version ['3']
+uv run --locked python -m landcover.monitor replay --ml http://127.0.0.1:8000 --darken 0.5 --fraction 0.5 --seed 0
+darkened 64 of 128 by 0.5 (fraction 0.5, seed 0)
+waiting for the window that starts at 21:00 UTC
+128 ok, window 21:00-21:05 UTC, version ['3']
+$ for j in 29928780 29928785 29928790; do kubectl logs job/drift-report-$j | grep '^window'; done
+window 2026-11-26 20:55-21:00 UTC: {"3": {"observations": {"current": 128, "reference": 256, "labelled": 64}, "drift": "3 drifted", "quality": 0.3345}}
+window 2026-11-26 21:00-21:05 UTC: {"3": {"observations": {"current": 128, "reference": 256, "labelled": 34}, "drift": "6 drifted", "quality": "few_observations"}}
+window 2026-11-26 21:05-21:10 UTC: {"3": {"observations": {"current": 0, "reference": 256, "labelled": 0}, "drift": "few_observations", "quality": "few_observations"}}
+$ kubectl exec deploy/postgres -- psql -U "$POSTGRES_USER" -d landcover -Atc "SELECT left(source_id, 6), count(*) FROM serving.predictions WHERE received_at >= '2026-11-26 21:00Z' AND received_at < '2026-11-26 21:05Z' GROUP BY 1"
+replay|64
+shift/|64
+```
+
+The brightness distance was 0.322 in the unchanged window and 0.631 in the shifted one, 0.131 above the threshold. The darkened colour means moved too (red 0.527, green 0.664, blue 0.692). Of the 128 shifted-window rows, only the 34 unshifted development quadrants have labels, so quality is `few_observations`: the darkened rows are a population without labels. The U-Net's class shares also cross on the shifted window (building 0.548, rangeland 0.540), but the alert watches brightness only.
+
+![Grafana dashboard from 20:45 to 21:20: the drift distances step up at 21:05 with brightness above the red threshold line at 0.5, the share of drifted columns rises from 30% to 60%, two request bursts at 20:55 and 21:00, and the data and job ages](docs/screenshots/grafana-drift-alert.png)
+
+The alert and the email, with the Mailpit port-forward:
+
+```text
+$ curl -s 127.0.0.1:9090/api/v1/alerts      # at 21:05:29
+{"status":"success","data":{"alerts":[{"labels":{"alertname":"BrightnessDrift","column":"brightness","job":"landcover-drift","model_version":"3","severity":"email"},"annotations":{"description":"Brightness distance 0.631 is at or above the threshold 0.5 in the report window ending 2026-11-26 21:05:00 +0000 UTC.","summary":"Brightness drift on model version 3"},"state":"firing","activeAt":"2026-11-26T21:05:15.940605192Z","value":"6.305796999189909e-01"}]}}
+$ curl -s 127.0.0.1:8025/api/v1/messages    # the drift email, trimmed to its envelope
+{
+  "Created": "2026-11-26T21:05:45.99Z",
+  "From": {"Name": "", "Address": "alertmanager@landcover.local"},
+  "To": [{"Name": "", "Address": "operator@landcover.local"}],
+  "Subject": "[FIRING:1] BrightnessDrift 3 (brightness landcover-drift email)",
+  "Snippet": "1 alert for alertname=BrightnessDrift model_version=3 View in Alertmanager [1] Firing Labels alertname = BrightnessDriftcolumn = brightnessjob = landcover-driftmodel_version = 3severity = email Annota..."
+}
+```
+
+![Mailpit showing the email from alertmanager@landcover.local to operator@landcover.local: BrightnessDrift for model version 3, column brightness, description "Brightness distance 0.631 is at or above the threshold 0.5 in the report window ending 2026-11-26 21:05:00 +0000 UTC"](docs/screenshots/mailpit-drift-alert.png)
+
+| Time (UTC) | Event |
+|---|---|
+| 20:55:05 | the unchanged replay starts; 128 `ok` by 20:55:55 |
+| 21:00:05 | the shifted replay starts; 128 `ok` by 21:00:49 |
+| 21:05:00 | the shifted window ends; the CronJob reports it |
+| 21:05:15.9 | `BrightnessDrift` active in Prometheus (`for` 0 s, 15 s evaluation) |
+| 21:05:45.99 | the email in Mailpit, after Alertmanager's 30 s group wait: 5 min 46 s after the shifted window started |
+| 21:10:26 | the next report has an empty window; `/api/v1/alerts` is empty |
+
+Before and after, `/health/ready` reported `model_version` 3 and the same image commit: the alert changed nothing. A second shifted replay with the same seed (window 21:20–21:25) gave the same ten distances to the last digit, brightness 0.6305796999189909 again.
+
+### Memory of the alerting components
+
+`memory.peak` after the demonstration:
+
+| Pod | `memory.peak` | Request / limit |
+|---|---|---|
+| Alertmanager | 29 MiB | 32 / 64 MiB |
+| Mailpit, two emails | 47 MiB | 32 / 128 MiB |
+
 ### The operator's first ten minutes
 
 After a `BrightnessDrift` email (design Section 5.5):
@@ -1168,3 +1250,31 @@ The rules are tested against synthetic series in [k8s/alerts_test.yml](k8s/alert
 docker run --rm -v "$PWD/k8s:/k8s" --entrypoint promtool prom/prometheus:v3.13.5 test rules /k8s/alerts_test.yml
 docker run --rm -v "$PWD/k8s:/k8s" --entrypoint amtool prom/alertmanager:v0.34.2 check-config /k8s/alertmanager.yml
 ```
+
+## Lab 4: benchmarks
+
+[scripts/bench.py](scripts/bench.py) measures the deployed services for Section 7.3 of the [design document](docs/design.md). It sends 5 warm-up and 30 measured requests to `/predict` for a 256×256 quadrant, a 512×512 tile and a 1024×1024 mosaic of four development tiles, repeats the 512 run with 2 concurrent clients, sends the first 10 questions of [eval/questions.toml](eval/questions.toml) to `/ask` when `--llm` is given, compares the p95 of all `/predict` requests with Prometheus' `histogram_quantile`, and reads `memory.peak` of every running pod. With `make llm-server` running and the port-forwards of `make cluster` and [Channel](#channel), on the author's cluster at commit `1aac05b` (U-Net, version 3):
+
+```text
+$ kubectl port-forward svc/llm 8002:8000 &
+$ uv run --locked python scripts/bench.py --ml http://127.0.0.1:8000 --prometheus http://127.0.0.1:9090 --llm http://127.0.0.1:8002
+/predict          256: p50 0.331 s, p95 0.356 s, 3.01 requests/s
+/predict          512: p50 1.332 s, p95 1.415 s, 0.75 requests/s
+/predict         1024: p50 6.091 s, p95 6.315 s, 0.16 requests/s
+/predict 512 2 clients: p50 2.767 s, p95 2.806 s, 0.72 requests/s
+/predict all sizes: p95 6.152 s measured (without warm-ups), histogram_quantile(0.95) 9.129 s
+/ask 10 questions: p50 8.93 s, p95 12.44 s
+memory.peak alertmanager-5b97ff6c8f-r5qcq: 30 MiB
+memory.peak grafana-87df95659-qwqqt: 769 MiB
+memory.peak llm-64ff6d8c67-28bds: 876 MiB
+memory.peak mailpit-744c57ffcc-wc4rc: 54 MiB
+memory.peak ml-858df48cf5-zqr2m: 1,396 MiB
+memory.peak mlflow-584546d79f-6czdx: 505 MiB
+memory.peak postgres-875f46476-s8wrs: 131 MiB
+memory.peak prometheus-6cd57c7598-bgfsf: 68 MiB
+memory.peak pushgateway-5664486c87-d6lb6: 38 MiB
+```
+
+Two clients do not raise throughput: the service handles one request at a time, so each client waits for the other and p50 doubles. Prometheus' p95 is higher than the measured one because its buckets jump from 5 s to 10 s and it interpolates inside that bucket; it also counts the warm-up requests.
+
+The bench's requests carry `X-Source-Id: bench/…` and are served traffic like any other, so the drift report includes them. One tile repeated 35 times is far from the training distribution: the window 21:25–21:30 held 86 bench rows and gave a brightness distance of 0.573, and `BrightnessDrift` kept firing. Run the bench outside the demonstration's windows and expect that alert.
