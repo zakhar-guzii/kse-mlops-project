@@ -40,22 +40,22 @@ Out of scope for this change:
   - with `.env` moved aside, it stops at once naming the file;
   - with llama-server stopped, it prints the LLM reason and exits 0;
   - no port-forward process remains after it exits (`pgrep -f port-forward`).
-- [ ] 4.3 Cold run from a clean clone. Clone the pushed branch into the scratchpad, `cp .env.example .env`, ask the author before running `minikube delete`, then run `time make cluster`. Verify it exits 0, and record the cold duration and the slowest steps from the script's output. Run it again and record the warm duration.
-- [ ] 4.4 Add the README section "Lab 4: cluster" (design Decision 13). It covers prerequisites, `make cluster` with its captured output, the two durations, the memory table of 3.3, port-forward commands, `minikube stop` and `minikube delete`, and the code-132 note if 3.1 needed it. Verify every command in it runs as written on the current commit.
+- [x] 4.3 Cold run from a clean clone. Clone the pushed branch into the scratchpad, `cp .env.example .env`, ask the author before running `minikube delete`, then run `time make cluster`. Verify it exits 0, and record the cold duration and the slowest steps from the script's output. Run it again and record the warm duration.
+- [x] 4.4 Add the README section "Lab 4: cluster" (design Decision 13). It covers prerequisites, `make cluster` with its captured output, the two durations, the memory table of 3.3, port-forward commands, `minikube stop` and `minikube delete`, and the code-132 note if 3.1 needed it. Verify every command in it runs as written on the current commit.
 
 ## 5. Evidence
 
-- [ ] 5.1 Missing model in the cluster: follow design Decision 13 with `MODEL_ALIAS=missing`. Paste the captured `rollout status` failure, `get pods` (new pod 0/1), the new pod's readiness events and the EndpointSlice without the new pod's address. Create alias `missing` and show the pod becoming ready without a restart, then delete the alias and run `rollout undo`. Verify `champion` and the Deployment are back as before and the README block is pasted, not retyped.
-- [ ] 5.2 Promotion without a rebuild. Import `runs/unet-c1f77a3` into the cluster registry and register it. Verify it becomes version 3 with the original lineage tags. Run `make champion VERSION=3`, `rollout restart` and `rollout status`. Verify `/predict` reports `"3"` and `kubectl get deploy ml -o wide` shows the same image before and after. Paste both into the README with the reviewer's path (`VERSION=1`, back to 2). Verify `champion` stays on 3 for the author's cluster and that the README says which state a fresh `make cluster` gives.
-- [ ] 5.3 With `make llm-server` up, capture `kubectl get pods,svc` with `postgres`, `mlflow`, `ml` and `llm` ready and the completed Job, and paste it into the README.
+- [x] 5.1 Missing model in the cluster: follow design Decision 13 with `MODEL_ALIAS=missing`. Paste the captured `rollout status` failure, `get pods` (new pod 0/1), the new pod's readiness events and the EndpointSlice without the new pod's address. Create alias `missing` and show the pod becoming ready without a restart, then delete the alias and run `rollout undo`. Verify `champion` and the Deployment are back as before and the README block is pasted, not retyped.
+- [x] 5.2 Promotion without a rebuild. Import `runs/unet-c1f77a3` into the cluster registry and register it. Verify it becomes version 3 with the original lineage tags. Run `make champion VERSION=3`, `rollout restart` and `rollout status`. Verify `/predict` reports `"3"` and `kubectl get deploy ml -o wide` shows the same image before and after. Paste both into the README with the reviewer's path (`VERSION=1`, back to 2). Verify `champion` stays on 3 for the author's cluster and that the README says which state a fresh `make cluster` gives.
+- [x] 5.3 With `make llm-server` up, capture `kubectl get pods,svc` with `postgres`, `mlflow`, `ml` and `llm` ready and the completed Job, and paste it into the README.
 
 ## 6. Design document and scorecard
 
-- [ ] 6.1 Revise Sections 5.5, 6.2, 6.4 and 6.7 as in design Decision 13, and the same passages in the local `docs/design.uk.md`. Verify:
+- [x] 6.1 Revise Sections 5.5, 6.2, 6.4 and 6.7 as in design Decision 13, and the same passages in the local `docs/design.uk.md`. Verify:
   - `grep -n "until Lab 4\|Lab 4 adds authentication\|move to Minikube in Lab 4" docs/design.md` finds nothing;
   - `git check-ignore docs/design.uk.md` succeeds;
   - re-applying the index Job on a new commit prints the unchanged index version, which shows Sections 5.1 and 6.8 were not edited.
-- [ ] 6.2 Add the three scorecard rows "Services containerized", "Services deployed with health contracts" and "One command brings the system up" to the README table, each linking its README block. Verify each link resolves to an existing heading.
+- [x] 6.2 Add the three scorecard rows "Services containerized", "Services deployed with health contracts" and "One command brings the system up" to the README table, each linking its README block. Verify each link resolves to an existing heading.
 
 ## 7. Integration check
 

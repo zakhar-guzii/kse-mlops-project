@@ -60,7 +60,7 @@ An ML pod whose alias cannot be loaded SHALL stay running and not ready. It SHAL
 
 #### Scenario: Alias absent
 - **WHEN** the ML Deployment is started with an alias the registry does not have
-- **THEN** its new pod shows 0/1 ready, its events name the 503 readiness failure, and its address is absent from the Service's endpoints.
+- **THEN** its new pod shows 0/1 ready, its events name the 503 readiness failure, its address is absent from the Service's Endpoints and marked not ready in its EndpointSlice, and the previous pod keeps serving.
 
 #### Scenario: Model appears
 - **WHEN** the alias is then created in the registry

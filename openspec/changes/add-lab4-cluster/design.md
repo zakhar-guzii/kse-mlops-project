@@ -236,7 +236,7 @@ README section "Lab 4: cluster":
 Missing model:
 1. `kubectl set env deployment/ml MODEL_ALIAS=missing`.
 2. `rollout status --timeout=60s`, which fails.
-3. Capture `get pods`, the new pod's `describe` events and `get endpointslices -l kubernetes.io/service-name=ml`.
+3. Capture `get pods`, the new pod's `describe` events and log, `get endpoints ml` (only the old pod) and `get endpointslices -l kubernetes.io/service-name=ml` (the new pod listed with `ready=false`), and `/health/ready` and `/predict` of the new pod through a pod port-forward.
 4. Create alias `missing` and show the pod become ready without a restart.
 5. Delete the alias and run `kubectl rollout undo deployment/ml`.
 

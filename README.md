@@ -20,6 +20,9 @@ Lab 3 adds the GIS assistant's documentation answers: a versioned retrieval inde
 | LLM component evaluated | `make answer-eval TOP_K=<n>` logs hit rate, MRR and the judged answer metric for 32 questions; the table compares the plain baseline with top-k 3, 5 and 10, and the judge is checked against reviewed labels ([Lab 3: retrieval-augmented answers](#lab-3-retrieval-augmented-answers), [eval/judge-check-rag.toml](eval/judge-check-rag.toml)) | Lab 3 |
 | Prompts versioned | Each prompt is a file in [prompts/](prompts/), and every run of `landcover-answers` carries its `prompt_hash` and `judge_prompt_hash`, the first 12 hex digits of the file's SHA-256 ([Lab 3: LLM baseline](#lab-3-llm-baseline)) | Lab 3 |
 | Cost and latency recorded | Every answer run logs tokens in and out, a shadow cost, compute seconds and p50/p95 latency; the columns of the [answer table](#lab-3-retrieval-augmented-answers) give them per run | Lab 3 |
+| Services containerized | `make images` builds both images from `git archive HEAD`, tagged with the full commit, and refuses uncommitted changes ([Build](#build)) | Lab 4 |
+| Services deployed with health contracts | Both services, MLflow and PostgreSQL ready on Minikube ([Pods and services](#pods-and-services)); with the alias missing the ML pod stays 0/1 and out of the Service's endpoints ([Missing model in the cluster](#missing-model-in-the-cluster)); a promotion and a restart change the reported version with the same image ([Promotion in the cluster](#promotion-in-the-cluster)) | Lab 4 |
+| One command brings the system up | `make cluster` from a clean clone starts Minikube, deploys every component, seeds the registry and passes a smoke request to `/predict` in 11 minutes cold and 9 s repeated ([Bring-up](#bring-up)) | Lab 4 |
 
 ## Lab 1 status
 
@@ -731,3 +734,227 @@ Measured in the ML container at commit `d0d7818`, with `OMP_NUM_THREADS=1` as th
 | 1024×1024 image | 6.8 s | 1,145 MiB |
 
 On the Mac host a warm U-Net takes 0.32 s per 512×512 tile on one thread. One answer of the LLM service took 8.5 s, of which 0.09 s was retrieval and 8.46 s generation for 2,028 prompt and 30 completion tokens.
+
+## Lab 4: cluster
+
+Lab 4 runs the two services on Minikube next to their own MLflow server and PostgreSQL. One command brings it up from a clean clone. The text model stays on the host.
+
+### Bring-up
+
+Prerequisites, besides [Local setup](#local-setup):
+- Docker Desktop with at least 7 GB of memory (Settings, Resources);
+- [Minikube](https://minikube.sigs.k8s.io/docs/start/) 1.33.1 in `PATH`;
+- `cp .env.example .env`.
+
+No Compose stack, cloud account or kubectl is needed: the command uses `minikube kubectl --`, a client that matches the cluster's Kubernetes 1.30.0. Stop Compose (`make down`) first so that the two fit in memory.
+
+```sh
+make cluster
+```
+
+The command:
+- starts Minikube (Kubernetes 1.30.0, docker driver and runtime, `MINIKUBE_MEMORY=6144` and `MINIKUBE_CPUS=4` by default) unless it is running;
+- builds both service images of `HEAD` and the MLflow image of [docker/mlflow](docker/mlflow) with Minikube's Docker daemon;
+- runs `make sample`;
+- applies [k8s/landcover.yaml](k8s/landcover.yaml) with the ConfigMap, a Secret built from `.env` and the commit in the image tags;
+- seeds an empty registry: the majority-class rule as version 1 and the random forest as version 2, `champion` on 2;
+- waits for the retrieval index Job and the ML service;
+- sends a smoke request to `/predict` ([scripts/smoke.py](scripts/smoke.py)). The request fails unless the response reports the champion's version and the deployed commit.
+
+When `make llm-server` is running on the host, the command also waits for the LLM service and asks it one question. Otherwise it says why the LLM service cannot be ready and still succeeds.
+
+The cold run from a clean clone, with a new Minikube profile and no images in it, at commit `3984c35` (build, download and apply lines left out):
+
+```text
+== minikube (at 0 s)
+== images, built by Minikube's Docker daemon (at 20 s)
+== data sample (at 359 s)
+== manifests (at 559 s)
+deployment "postgres" successfully rolled out
+deployment "mlflow" successfully rolled out
+pod/mlflow-6cc95db77b-2j9cc condition met
+== registry (at 586 s)
+run 7fecc834fd8846b6902310d78aadc588: development mIoU 0.0456 (recorded 0.0456)
+landcover-segmenter version 1: run 7fecc834fd8846b6902310d78aadc588, data_version 6a0c8cc2708d6616c0bfb9f3f5095708.dir, git_commit 3984c35cb0801116d75df783a44ebeacbd4c715a; predicted a 512x512 mask
+run fccdc33e12a44b539e8a6d0f69c65c24: development mIoU 0.1478 (recorded 0.1478)
+landcover-segmenter version 2: run fccdc33e12a44b539e8a6d0f69c65c24, data_version 6a0c8cc2708d6616c0bfb9f3f5095708.dir, git_commit 3984c35cb0801116d75df783a44ebeacbd4c715a; predicted a 512x512 mask
+landcover-segmenter@champion -> version 2
+== retrieval index (at 641 s)
+job.batch/retrieval-index-3984c35cb0801116d75df783a44ebeacbd4c715a condition met
+== ML service (at 641 s)
+deployment "ml" successfully rolled out
+smoke /predict: landcover-segmenter version 2 (champion), image 3984c35cb0801116d75df783a44ebeacbd4c715a
+== LLM service (at 662 s)
+llm not ready: no text model server on 127.0.0.1:8081 (make llm-server)
+took 662 s
+```
+
+| Run | Duration |
+|---|---|
+| Cold: clean clone, new Minikube profile, no images or data | **662 s (11 min)** |
+| Repeated on the same commit: nothing built, registered or indexed | 9 s |
+| After a new commit: the last image layer and a new index Job | about 55 s |
+
+The three slowest cold steps are the images (339 s: the base images, the locked packages with the CPU build of torch, and the 471 MB embedding model, all downloaded into Minikube), the data sample (200 s: 192 files from Hugging Face over range requests) and the registry seed (55 s: training and registering two models). The index Job runs during the seed. The Minikube base image was already cached by Docker Desktop. Without it, the first start pulls about 500 MB more.
+
+A run on a new commit deploys the new images and builds the index again with a Job named after the commit. Completed Jobs of earlier commits stay listed; `kubectl delete job -l app=retrieval-index` removes them. PostgreSQL takes its password from `.env` only on the first start of its volume. After changing `POSTGRES_PASSWORD`, run `minikube delete` before `make cluster`. `minikube stop` keeps the cluster, the registry and the index for the next `make cluster`; `minikube delete` removes all of them.
+
+### Using the cluster from the host
+
+The Services are of type ClusterIP, and the node is not reachable from macOS with the docker driver, so the host uses port-forwards bound to `127.0.0.1`:
+
+```sh
+alias kubectl="minikube kubectl --"
+kubectl port-forward svc/mlflow 5002:5000 &   # MLflow UI and the registry for make champion, make import
+kubectl port-forward svc/ml 8000:8000 &
+kubectl port-forward svc/llm 8002:8000 &
+export MLFLOW_TRACKING_URI=http://127.0.0.1:5002
+```
+
+The ConfigMap `landcover` holds the tracking address (`http://mlflow:5000`), the model name, the alias and the text-model address (`http://host.minikube.internal:8081/v1`). The Secret `landcover` holds the PostgreSQL user, its password and `WAREHOUSE_DSN`. The LLM service reaches the host's llama-server through `host.minikube.internal`, Docker Desktop's gateway to the host, although the server listens on `127.0.0.1` only. MLflow accepts only the host names `mlflow:5000`, its full cluster name and the two port-forward addresses. It runs one worker with `MLFLOW_SERVER_ENABLE_JOB_EXECUTION=false`. Without that setting MLflow 3.16 also starts about ten job-runner processes of about 220 MB each, and the first deployment was killed for exceeding its 1 GiB limit.
+
+### Pods and services
+
+With `make llm-server` running, after the promotion below:
+
+```text
+$ kubectl get pods,svc
+NAME                                                                 READY   STATUS      RESTARTS   AGE
+pod/llm-b759bc447-t7dw7                                              1/1     Running     0          5m41s
+pod/ml-76fd5876f4-j72f5                                              1/1     Running     0          40s
+pod/mlflow-6cc95db77b-2j9cc                                          1/1     Running     0          5m41s
+pod/postgres-875f46476-p6qv9                                         1/1     Running     0          6m1s
+pod/retrieval-index-3984c35cb0801116d75df783a44ebeacbd4c715a-kqrxk   0/1     Completed   0          5m41s
+
+NAME                 TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)    AGE
+service/kubernetes   ClusterIP   10.96.0.1        <none>        443/TCP    15m
+service/llm          ClusterIP   10.105.138.220   <none>        8000/TCP   5m41s
+service/ml           ClusterIP   10.105.253.89    <none>        8000/TCP   5m41s
+service/mlflow       ClusterIP   10.106.187.93    <none>        5000/TCP   5m41s
+service/postgres     ClusterIP   10.106.23.16     <none>        5432/TCP   6m1s
+```
+
+The monitoring components join this list in the next part of Lab 4.
+
+### Missing model in the cluster
+
+Readiness calls `/health/ready` and liveness calls `/health/live`. The LLM service also has a startup probe, because it loads its embedding model before it accepts connections. The ML service starts at once and loads its model in the background. It is reproduced here with an alias that the registry does not have (captured at commit `3984c35`). The rolling update starts a new pod and keeps the old one until the new one is ready:
+
+```text
+$ kubectl set env deployment/ml MODEL_ALIAS=missing
+deployment.apps/ml env updated
+$ kubectl rollout status deployment/ml --timeout=60s
+Waiting for deployment "ml" rollout to finish: 1 old replicas are pending termination...
+error: timed out waiting for the condition
+$ kubectl get pods -l app=ml
+NAME                  READY   STATUS    RESTARTS   AGE
+ml-68c5f5c974-7vvwf   1/1     Running   0          3m1s
+ml-7f4c74d5b9-wmsd4   0/1     Running   0          60s
+$ kubectl describe pod ml-7f4c74d5b9-wmsd4 | sed -n '/^Events/,$p'
+Events:
+  Type     Reason     Age                From               Message
+  ----     ------     ----               ----               -------
+  Normal   Scheduled  67s                default-scheduler  Successfully assigned default/ml-7f4c74d5b9-wmsd4 to minikube
+  Normal   Pulled     67s                kubelet            Container image "landcover-ml:3984c35cb0801116d75df783a44ebeacbd4c715a" already present on machine
+  Normal   Created    67s                kubelet            Created container ml
+  Normal   Started    67s                kubelet            Started container ml
+  Warning  Unhealthy  2s (x15 over 66s)  kubelet            Readiness probe failed: HTTP probe failed with statuscode: 503
+$ kubectl get endpointslices -l kubernetes.io/service-name=ml -o jsonpath='{range .items[*].endpoints[*]}{.addresses[0]} ready={.conditions.ready} {.targetRef.name}{"\n"}{end}'
+10.244.0.5 ready=true ml-68c5f5c974-7vvwf
+10.244.0.8 ready=false ml-7f4c74d5b9-wmsd4
+$ kubectl logs ml-7f4c74d5b9-wmsd4
+INFO:     10.244.0.1:46252 - "GET /health/live HTTP/1.1" 200 OK
+landcover-segmenter@missing not loaded: RestException: INVALID_PARAMETER_VALUE: Registered model alias missing not found.; retrying in 10 s
+INFO:     10.244.0.1:39162 - "GET /health/ready HTTP/1.1" 503 Service Unavailable
+$ kubectl get endpoints ml
+NAME   ENDPOINTS         AGE
+ml     10.244.0.5:8000   3m21s
+$ kubectl port-forward pod/ml-7f4c74d5b9-wmsd4 8010:8000 &   # this pod only
+$ curl -i localhost:8010/health/ready
+HTTP/1.1 503 Service Unavailable
+date: Thu, 26 Nov 2026 14:40:31 GMT
+server: uvicorn
+content-length: 148
+content-type: application/json
+
+{"ready":false,"reason":"landcover-segmenter@missing not loaded: RestException: INVALID_PARAMETER_VALUE: Registered model alias missing not found."}
+$ curl -i --data-binary @data/raw/D017-2021/images/AA-S2-9_2-7.tif localhost:8010/predict
+HTTP/1.1 503 Service Unavailable
+date: Thu, 26 Nov 2026 14:40:31 GMT
+server: uvicorn
+content-length: 134
+content-type: application/json
+
+{"detail":"landcover-segmenter@missing not loaded: RestException: INVALID_PARAMETER_VALUE: Registered model alias missing not found."}
+```
+
+
+`kubectl get endpoints ml` lists only the old pod, so the Service sends no traffic to the new one. The EndpointSlice keeps the new pod's address marked `ready=false`. When the alias was then created on version 1, the same pod became ready without a restart:
+
+```text
+$ MLFLOW_TRACKING_URI=http://127.0.0.1:5002 uv run --locked python -c "from mlflow import MlflowClient; MlflowClient().set_registered_model_alias(\"landcover-segmenter\", \"missing\", \"1\")"
+# ready after 6 s
+$ kubectl get pod ml-7f4c74d5b9-wmsd4
+NAME                  READY   STATUS    RESTARTS   AGE
+ml-7f4c74d5b9-wmsd4   1/1     Running   0          105s
+$ kubectl logs ml-7f4c74d5b9-wmsd4 | grep loaded
+loaded landcover-segmenter version 1 (landcover-segmenter@missing), image 3984c35cb0801116d75df783a44ebeacbd4c715a
+```
+
+`kubectl rollout undo deployment/ml` and deleting the alias `missing` restored the deployment and the registry.
+
+### Promotion in the cluster
+
+The author's U-Net (the saved result of [Results](#results)) was imported into the cluster's registry and registered as version 3, with its original lineage (`git_commit` `c1f77a3`, development mIoU 0.3355):
+
+```sh
+make import RESULT=runs/unet-c1f77a3            # with the MLflow port-forward and MLFLOW_TRACKING_URI above
+make register RUN=<printed run ID> MODEL=unet   # landcover-segmenter version 3
+```
+
+`make champion VERSION=3` and `kubectl rollout restart deployment/ml` then moved the service from version 2 to the U-Net. The block below was captured afterwards with the commands of this README and the port-forwards above. It moves `champion` to version 1, the reviewer's path, and back to version 3:
+
+```text
+$ kubectl get deployment ml -o wide
+NAME   READY   UP-TO-DATE   AVAILABLE   AGE    CONTAINERS   IMAGES                                                  SELECTOR
+ml     1/1     1            1           7m4s   ml           landcover-ml:3984c35cb0801116d75df783a44ebeacbd4c715a   app=ml
+$ curl -s --data-binary @data/raw/D017-2021/images/AA-S2-9_2-7.tif localhost:8000/predict | grep -o '"model_version":"[0-9]*"'
+"model_version":"3"
+$ make champion VERSION=1
+landcover-segmenter@champion -> version 1
+$ kubectl rollout restart deployment/ml
+deployment.apps/ml restarted
+$ kubectl rollout status deployment/ml
+deployment "ml" successfully rolled out
+$ curl -s --data-binary @data/raw/D017-2021/images/AA-S2-9_2-7.tif localhost:8000/predict | grep -o '"model_version":"[0-9]*"'
+"model_version":"1"
+$ make champion VERSION=3
+landcover-segmenter@champion -> version 3
+$ kubectl rollout restart deployment/ml
+deployment.apps/ml restarted
+$ kubectl rollout status deployment/ml
+deployment "ml" successfully rolled out
+$ curl -s --data-binary @data/raw/D017-2021/images/AA-S2-9_2-7.tif localhost:8000/predict | grep -o '"model_version":"[0-9]*"'
+"model_version":"3"
+$ kubectl get deployment ml -o wide
+NAME   READY   UP-TO-DATE   AVAILABLE   AGE     CONTAINERS   IMAGES                                                  SELECTOR
+ml     1/1     1            1           7m31s   ml           landcover-ml:3984c35cb0801116d75df783a44ebeacbd4c715a   app=ml
+```
+
+The image tag is the same before and after: the registry chose the model, the restart loaded it, and nothing was rebuilt. The author's cluster keeps `champion` on version 3. A fresh `make cluster` has versions 1 and 2 with `champion` on 2. A reviewer repeats the proof with `make champion VERSION=1`, the same restart, a response reporting `"1"`, and `make champion VERSION=2` back.
+
+### Memory
+
+Measured with the cluster up, after one 1024×1024 `/predict` and one `/ask`, Compose stopped and Docker Desktop given 7.75 GiB:
+
+| What | Command | Value |
+|---|---|---|
+| PostgreSQL pod | `memory.peak` of the container's cgroup | 131 MiB |
+| MLflow pod (one worker, no job execution) | same | 402 MiB |
+| ML pod, random forest at 1024×1024 | same | 1,476 MiB (limit 2 GiB) |
+| LLM pod | same | 861 MiB (limit 1.5 GiB) |
+| Minikube node container | `docker stats --no-stream` | 3.59 GiB of 6 GiB |
+| Text model server, `--cache-ram 2048` | `footprint $(pgrep -x llama-server)` | 1,725 MB (peak 1,811 MB) |
+| The Mac | `memory_pressure` | 30% free of 24 GiB |
+
+The memory requests and limits in [k8s/landcover.yaml](k8s/landcover.yaml) come from these peaks. The random forest needs more memory at 1024×1024 than the U-Net (1,145 MiB in [Measurements](#measurements)), so the ML limit is 2 GiB. `make llm-server` now caps the server's prompt cache at 2 GiB (`--cache-ram 2048`). Without the cap the cache grew to 8.6 GB in Lab 3. The cap does not change the answers, because the cache only reuses prompt prefixes that were already evaluated. The node keeps more than 2 GiB free for the monitoring components.
