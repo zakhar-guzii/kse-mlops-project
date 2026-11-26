@@ -34,7 +34,7 @@ Out of scope for this change:
 ## 4. One command
 
 - [x] 4.1 Add `scripts/smoke.py` as in design Decision 11. Verify `predict` passes against the running `ml` and exits 1 naming both versions when `--commit` is wrong. Verify `ask` passes with the host server up.
-- [ ] 4.2 Add `scripts/cluster.sh` and the `cluster` target with `MINIKUBE_MEMORY` and `MINIKUBE_CPUS`, as in design Decision 10. Verify on the running cluster:
+- [x] 4.2 Add `scripts/cluster.sh` and the `cluster` target with `MINIKUBE_MEMORY` and `MINIKUBE_CPUS`, as in design Decision 10. Verify on the running cluster:
   - the command exits 0 and ends with `kubectl get pods,svc` and `took N s`;
   - a second run builds no layer, registers no version, creates no Job and passes the smoke request;
   - with `.env` moved aside, it stops at once naming the file;
