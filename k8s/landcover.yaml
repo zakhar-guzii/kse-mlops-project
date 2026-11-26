@@ -99,13 +99,18 @@ spec:
             - --host=0.0.0.0
             - --port=5000
             - --workers=1
-            - --backend-store-uri=$(MLFLOW_BACKEND_URI)
+            - --backend-store-uri=postgresql://$(POSTGRES_USER)@postgres/mlflow
             - --artifacts-destination=/mlartifacts
             # The Service name for pods, the port-forward of scripts/cluster.sh for the host.
             - --allowed-hosts=mlflow:5000,mlflow.default.svc.cluster.local:5000,localhost:5002,127.0.0.1:5002
           env:
-            - name: MLFLOW_BACKEND_URI
-              valueFrom: {secretKeyRef: {name: landcover, key: MLFLOW_BACKEND_URI}}
+            # The password through PGPASSWORD, so it is not in the process arguments.
+            - name: POSTGRES_USER
+              valueFrom: {secretKeyRef: {name: landcover, key: POSTGRES_USER}}
+            - name: PGPASSWORD
+              valueFrom: {secretKeyRef: {name: landcover, key: POSTGRES_PASSWORD}}
+            # MLflow 3.16 otherwise starts about ten job-runner processes of ~220 MB each for GenAI jobs.
+            - {name: MLFLOW_SERVER_ENABLE_JOB_EXECUTION, value: "false"}
           ports: [{containerPort: 5000}]
           startupProbe:
             httpGet: {path: /health, port: 5000}

@@ -10,7 +10,7 @@ This is the second of four Lab 4 changes: `add-lab4-services` → `add-lab4-clus
 
 - Deploy to Minikube 1.33.1 (Kubernetes 1.30.0, docker driver and runtime): PostgreSQL with pgvector holding the databases `landcover` and `mlflow`, the MLflow 3.16.1 tracking server, the ML service and the LLM service. Each runs as a Deployment with a Service. The cluster does not depend on the Compose stack.
 - Run MLflow with one worker and its allowed hosts set. It keeps metadata in the cluster's PostgreSQL and proxies artifacts to a persistent volume, so the cluster has no object store.
-- Put the tracking address, model name, alias and text-model address in a ConfigMap, and the database credentials and DSNs in a Secret created from `.env`.
+- Put the tracking address, model name, alias and text-model address in a ConfigMap, and the database credentials and the connection string that contains them in a Secret created from `.env`.
 - Add readiness and liveness probes on `/health/ready` and `/health/live`, and startup probes where start-up is slow (MLflow migrations, the LLM service's embedding model).
 - Build the retrieval index in the cluster with a Job that runs the LLM image's own corpus, settings and embedding model.
 - Add `make cluster`, one command that:

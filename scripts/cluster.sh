@@ -16,7 +16,7 @@ step() { echo "== $* (at ${SECONDS} s)"; }
 # minikube kubectl runs kubectl as a child, so stop the children of each background job too.
 trap 'for p in $(jobs -p); do pkill -P "$p"; kill "$p"; done 2>/dev/null || true' EXIT
 forward() {  # service, local port, service port
-    k port-forward "svc/$1" "127.0.0.1:$2:$3" >/dev/null 2>&1 &
+    k port-forward "svc/$1" "$2:$3" --address 127.0.0.1 >/dev/null 2>&1 &
     for _ in $(seq 60); do
         curl -s -o /dev/null "http://127.0.0.1:$2/" && return
         sleep 1
@@ -41,7 +41,6 @@ step "manifests"
 k create secret generic landcover --dry-run=client -o yaml \
     --from-literal=POSTGRES_USER="$POSTGRES_USER" --from-literal=POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
     --from-literal=WAREHOUSE_DSN="postgresql://$POSTGRES_USER:$POSTGRES_PASSWORD@postgres/landcover" \
-    --from-literal=MLFLOW_BACKEND_URI="postgresql://$POSTGRES_USER:$POSTGRES_PASSWORD@postgres/mlflow" \
     | k apply -f -
 k create configmap postgres-init --from-file=sql/warehouse.sql --dry-run=client -o yaml | k apply -f -
 manifest=$(sed "s/COMMIT/$commit/g" k8s/landcover.yaml)

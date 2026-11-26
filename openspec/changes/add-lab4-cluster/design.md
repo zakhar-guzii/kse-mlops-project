@@ -88,12 +88,12 @@ The image is `landcover-mlflow:3.16.1`, built from `docker/mlflow` in Minikube's
 
 ```sh
 mlflow server --host 0.0.0.0 --port 5000 --workers 1 \
-  --backend-store-uri "$MLFLOW_BACKEND_URI" \
+  --backend-store-uri "postgresql://$POSTGRES_USER@postgres/mlflow" \
   --artifacts-destination /mlartifacts \
   --allowed-hosts mlflow:5000,mlflow.default.svc.cluster.local:5000,localhost:5002,127.0.0.1:5002
 ```
 
-`MLFLOW_BACKEND_URI` (`postgresql://user:password@postgres/mlflow`) comes from the Secret. A port-forward keeps the client's `Host` header, so the host commands are accepted on 5002, and any other name is refused.
+`POSTGRES_USER` and `PGPASSWORD` come from the Secret, so the password is not in the process arguments (as in Compose). `MLFLOW_SERVER_ENABLE_JOB_EXECUTION=false`: by default MLflow 3.16 starts a job runner and about ten Huey consumers for its GenAI jobs, about 220 MB each. The first deployment was OOM-killed at 1 Gi and measured 1.6 GiB at 3 Gi; with job execution off, the pod uses about 350 MiB in five processes. A port-forward keeps the client's `Host` header, so the host commands are accepted on 5002. The API refuses any other name with 403, while `/health` answers every name.
 
 Probes:
 - startup `GET /health` every 5 s, 36 failures (3 min for the first migration);
@@ -141,7 +141,6 @@ Group 3 of the tasks measures these figures and corrects them.
 - Secret `landcover`, created the same way with `--from-literal` from the variables of `.env`, which the Makefile exports:
   - `POSTGRES_USER` and `POSTGRES_PASSWORD`
   - `WAREHOUSE_DSN=postgresql://U:P@postgres/landcover`
-  - `MLFLOW_BACKEND_URI=postgresql://U:P@postgres/mlflow`
 
   No AWS key: the cluster has no object store. No API key: the text model is local.
 
