@@ -502,17 +502,35 @@ Measure each source image once, before model normalization. Compute its three ch
 |---|---|---|---|
 | Invalid input | One upload against the input contract | Unsupported format or depth, decode failure or zero valid pixels | Reject at acceptance or fail the job with its reason. Count validation failures separately. Produce no mask or drift observation |
 | Unusually dark image | One valid image against training brightness | Below the training first percentile | Finish the job, attach a QA warning and include the observation in the input window |
-| Input drift | Distribution of per-image brightness and each RGB mean against frozen training histogram bins | Daily, over the last seven days, any feature has Population Stability Index (PSI) > 0.25 | Record the feature and PSI, publish the report and email the operator |
-| Prediction drift | Mean per-image fraction for each class against predictions from the same model and taxonomy on training images | Daily, over the last seven days, an absolute difference > 10 percentage points | Record the class, both fractions and their difference, publish the report and email the operator |
+| Input drift | Per-image brightness and each RGB mean of served images against reference observations of the training images | Daily, over the last seven days, any feature has a normed Wasserstein distance ≥ 0.5 reference standard deviations (provisional) | Record the feature and its distance, publish the report and email the operator |
+| Prediction drift | Per-image fraction of each class the labels can score against predictions from the same model version and taxonomy on the training images | Daily, over the last seven days, a class has a normed Wasserstein distance ≥ 0.5 (provisional) | Record the class, both mean fractions and the distance, publish the report and email the operator |
 | Suspected quality loss | Predictions paired with independent labelled control masks | Evaluate eligible controls under §5.4 | Report per-class IoU and mIoU to the operator for a promotion or rollback decision |
 
-Freeze a reference from the **training split** for each dataset, preprocessing configuration, taxonomy and immutable model version. Save brightness percentiles and histogram bin edges and counts for all four input features. Run that model on the same training images to save its per-class mean fractions. Build current observations from actual prediction endpoint traffic using precisely those feature definitions and bins. During a rollout, group by the recorded worker version and compare each group to its own reference.
+Freeze a reference from the **training split** for each dataset, preprocessing configuration, taxonomy and immutable model version: the per-image observations, the four input features and the predicted class fractions, that this model version produces when the training images go through the prediction endpoint. Save the training brightness percentiles for the dark-image warning. Build current observations from actual prediction endpoint traffic with the same feature definitions. During a rollout, group by the recorded worker version and compare each group to its own reference. The distance is normed Wasserstein, in reference standard deviations; it does not depend on the sample size, unlike a Kolmogorov–Smirnov p-value, and needs no bins, unlike the Population Stability Index (see the Lab 4 paragraph below).
 
 Each population comparison needs at least 50 eligible images on **each** side. A missing reference or too few observations yields `insufficient_data` for that signal and version. Each report identifies the signal, measured value, threshold, window, both sample counts, immutable model version and reference version.
 
-**Planned Lab 4 demonstration.** Pin the model, held-out fixture IDs, replay seed and window dates. Submit unmodified fixtures via the prediction endpoint into the first seven-day window (at least 50 eligible images). Submit a single valid darkened GeoTIFF to demonstrate a warning and a usable QGIS export. In a separate seven-day window of at least 50 eligible endpoint images, darken a recorded fraction by a recorded intensity multiplier while preserving valid pixels. Keep the two populations separate in the scheduled reports. Grafana will show both windows and the crossed threshold. Retain the operator's received alert email with the signal and report window. If the injection misses the threshold, record the result and repeat in a fresh window with a documented stronger shift.
+**Lab 4 monitoring (course).** A Kubernetes CronJob runs every 5 minutes and reports on the 5 minutes before its start, rounded down; windows do not overlap. The observation unit is a 256×256 quadrant of a sample tile sent to `/predict`. The reference of a model version is the request-log rows of the 256 quadrants of the four training batches, sent through the service by `make reference` with `reference/…` source IDs; `make cluster` builds it for the served version, and the operator runs it once after each promotion. Until then that version's report gives `insufficient_data` with reason `no_reference`. Evidently's `DataDriftPreset` with normed Wasserstein covers ten columns: the three channel means, brightness, and the fractions of the six classes the FLAIR labels can score (`developed` and `road` have no reference variance). Quality is the mean IoU of those six classes, as in Section 5.4, on the window's rows whose source ID has a label. The labels are the crosswalked masks of the 64 development quadrants (D017-2021) in `serving.labels`. The final batch D073-2022 is replayed without labels, a declared simulation of labels that have not arrived. Fewer than 50 observations on either side gives `insufficient_data` with reason `few_observations`. The minimum also applies to labelled rows for quality.
 
-In Lab 4, Prometheus will scrape service metrics and the Pushgateway, where the scheduled drift job will publish each report's metrics. Keep timestamp, safe input summaries, predicted class fractions, outcome and versions for each request under §6.5. Grafana and Alertmanager will use the reported signals for the dashboard and email.
+The thresholds above are provisional. A probe on the sample without any shift chose the test: 384 quadrants, the random forest and the U-Net, training tiles split in half by tile and batch 300 times. The probe found:
+
+- The Kolmogorov–Smirnov test flagged at least one feature at p < 0.05 in 34–42% of those no-shift splits, because quadrants of one tile and tiles of one batch are correlated.
+- PSI exceeded 0.25 in 65%.
+- The worst normed Wasserstein distance had a median of 0.23 and a 95th percentile of 0.45.
+
+Between the training and the held-out quadrants, the input features lie 0.32–0.35 apart. The U-Net's bareland, rangeland and building fractions lie 0.52–0.53 apart, because the held-out batches are other regions and years. The value used for alerting and its justification belong to the drift-alert part of Lab 4.
+
+Prometheus scrapes the services' `/metrics` and the Pushgateway, which holds one group per report. The group has:
+
+- the distance per column and model version;
+- the count and share of drifted columns, and the threshold;
+- the observation counts per side;
+- `insufficient_data` per signal with its reason;
+- the mean IoU;
+- the window end;
+- the receive time of the latest served request.
+
+Data age, the time since that request, is a separate signal from job age, the Pushgateway's `push_time_seconds`: a job that keeps running while nothing is served shows a growing data age. Grafana shows both windows of the demonstration from a dashboard file in Git (README, Lab 4: monitoring). For each request we keep the timestamp, safe input summaries, predicted class fractions, outcome and versions under §6.5.
 
 | Operational signal | Window and threshold | Reason | Action |
 |---|---|---|---|

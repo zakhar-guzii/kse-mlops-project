@@ -22,6 +22,7 @@ Lab 3 adds the GIS assistant's documentation answers: a versioned retrieval inde
 | Cost and latency recorded | Every answer run logs tokens in and out, a shadow cost, compute seconds and p50/p95 latency; the columns of the [answer table](#lab-3-retrieval-augmented-answers) give them per run | Lab 3 |
 | Services containerized | `make images` builds both images from `git archive HEAD`, tagged with the full commit, and refuses uncommitted changes ([Build](#build)) | Lab 4 |
 | Services deployed with health contracts | Both services, MLflow and PostgreSQL ready on Minikube ([Pods and services](#pods-and-services)); with the alias missing the ML pod stays 0/1 and out of the Service's endpoints ([Missing model in the cluster](#missing-model-in-the-cluster)); a promotion and a restart change the reported version with the same image ([Promotion in the cluster](#promotion-in-the-cluster)) | Lab 4 |
+| Monitoring scheduled | A CronJob reports every 5 minutes: drift of the served window against the training reference per input feature and predicted class share, mean IoU on labelled quadrants, insufficient data and data age, pushed to Prometheus; the Grafana dashboard from the repository shows two windows ([Lab 4: monitoring](#lab-4-monitoring), [Two windows](#two-windows)) | Lab 4 |
 | One command brings the system up | `make cluster` from a clean clone starts Minikube, deploys every component, seeds the registry and passes a smoke request to `/predict` in 11 minutes cold and 9 s repeated ([Bring-up](#bring-up)) | Lab 4 |
 
 ## Lab 1 status
@@ -754,12 +755,14 @@ make cluster
 
 The command:
 - starts Minikube (Kubernetes 1.30.0, docker driver and runtime, `MINIKUBE_MEMORY=6144` and `MINIKUBE_CPUS=4` by default) unless it is running;
-- builds both service images of `HEAD` and the MLflow image of [docker/mlflow](docker/mlflow) with Minikube's Docker daemon;
+- builds the two service images and the drift job image of `HEAD` and the MLflow image of [docker/mlflow](docker/mlflow) with Minikube's Docker daemon;
 - runs `make sample`;
-- applies [k8s/landcover.yaml](k8s/landcover.yaml) with the ConfigMap, a Secret built from `.env` and the commit in the image tags;
+- applies [k8s/landcover.yaml](k8s/landcover.yaml) with the ConfigMaps (including [k8s/prometheus.yml](k8s/prometheus.yml) and [k8s/grafana/](k8s/grafana/)), a Secret built from `.env` and the commit in the image tags;
 - seeds an empty registry: the majority-class rule as version 1 and the random forest as version 2, `champion` on 2;
 - waits for the retrieval index Job and the ML service;
-- sends a smoke request to `/predict` ([scripts/smoke.py](scripts/smoke.py)). The request fails unless the response reports the champion's version and the deployed commit.
+- sends a smoke request to `/predict` ([scripts/smoke.py](scripts/smoke.py)). The request fails unless the response reports the champion's version and the deployed commit;
+- builds the drift reference of the served version and loads the development labels ([Lab 4: monitoring](#lab-4-monitoring)); both do nothing when already in place;
+- waits for Prometheus, the Pushgateway and Grafana, and prints the port-forward commands of the dashboard and Prometheus.
 
 When `make llm-server` is running on the host, the command also waits for the LLM service and asks it one question. Otherwise it says why the LLM service cannot be ready and still succeeds.
 
@@ -815,26 +818,38 @@ The ConfigMap `landcover` holds the tracking address (`http://mlflow:5000`), the
 
 ### Pods and services
 
-With `make llm-server` running, after the promotion below:
+With `make llm-server` running, the monitoring components deployed and the drift reports of [Two windows](#two-windows) done:
 
 ```text
 $ kubectl get pods,svc
 NAME                                                                 READY   STATUS      RESTARTS   AGE
-pod/llm-b759bc447-t7dw7                                              1/1     Running     0          5m41s
-pod/ml-76fd5876f4-j72f5                                              1/1     Running     0          40s
-pod/mlflow-6cc95db77b-2j9cc                                          1/1     Running     0          5m41s
-pod/postgres-875f46476-p6qv9                                         1/1     Running     0          6m1s
-pod/retrieval-index-3984c35cb0801116d75df783a44ebeacbd4c715a-kqrxk   0/1     Completed   0          5m41s
+pod/drift-report-29928555-88fs9                                      0/1     Error       0          27m
+pod/drift-report-29928570-fvf7x                                      0/1     Completed   0          12m
+pod/drift-report-29928575-pb2qt                                      0/1     Completed   0          7m59s
+pod/drift-report-29928580-njdhw                                      0/1     Completed   0          2m59s
+pod/grafana-87df95659-nr5jr                                          1/1     Running     0          21m
+pod/llm-646cd5f99b-cdhc9                                             1/1     Running     0          43m
+pod/ml-57b474875f-pptfp                                              1/1     Running     0          43m
+pod/mlflow-67bd658488-r9xww                                          1/1     Running     0          43m
+pod/postgres-875f46476-p6qv9                                         1/1     Running     0          3h6m
+pod/prometheus-855c48cf6c-dkp2p                                      1/1     Running     0          21m
+pod/pushgateway-5664486c87-q99wt                                     1/1     Running     0          27m
+pod/retrieval-index-3984c35cb0801116d75df783a44ebeacbd4c715a-kqrxk   0/1     Completed   0          3h5m
+pod/retrieval-index-64b5ff6a9ddc25cccb83b88702c39fdada546e8c-m8mrh   0/1     Completed   0          177m
+pod/retrieval-index-be7e975db7c98e776855b500c99fc5cbc064794d-fbsng   0/1     Completed   0          42m
 
-NAME                 TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)    AGE
-service/kubernetes   ClusterIP   10.96.0.1        <none>        443/TCP    15m
-service/llm          ClusterIP   10.105.138.220   <none>        8000/TCP   5m41s
-service/ml           ClusterIP   10.105.253.89    <none>        8000/TCP   5m41s
-service/mlflow       ClusterIP   10.106.187.93    <none>        5000/TCP   5m41s
-service/postgres     ClusterIP   10.106.23.16     <none>        5432/TCP   6m1s
+NAME                  TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)    AGE
+service/grafana       ClusterIP   10.103.39.192    <none>        3000/TCP   140m
+service/kubernetes    ClusterIP   10.96.0.1        <none>        443/TCP    3h15m
+service/llm           ClusterIP   10.105.138.220   <none>        8000/TCP   3h5m
+service/ml            ClusterIP   10.105.253.89    <none>        8000/TCP   3h5m
+service/mlflow        ClusterIP   10.106.187.93    <none>        5000/TCP   3h5m
+service/postgres      ClusterIP   10.106.23.16     <none>        5432/TCP   3h6m
+service/prometheus    ClusterIP   10.103.248.190   <none>        9090/TCP   140m
+service/pushgateway   ClusterIP   10.107.29.174    <none>        9091/TCP   140m
 ```
 
-The monitoring components join this list in the next part of Lab 4.
+The report Jobs and their pods are in [Lab 4: monitoring](#lab-4-monitoring).
 
 ### Missing model in the cluster
 
@@ -958,3 +973,137 @@ Measured with the cluster up, after one 1024×1024 `/predict` and one `/ask`, Co
 | The Mac | `memory_pressure` | 30% free of 24 GiB |
 
 The memory requests and limits in [k8s/landcover.yaml](k8s/landcover.yaml) come from these peaks. The random forest needs more memory at 1024×1024 than the U-Net (1,145 MiB in [Measurements](#measurements)), so the ML limit is 2 GiB. `make llm-server` now caps the server's prompt cache at 2 GiB (`--cache-ram 2048`). Without the cap the cache grew to 8.6 GB in Lab 3. The cap does not change the answers, because the cache only reuses prompt prefixes that were already evaluated. The node keeps more than 2 GiB free for the monitoring components.
+
+## Lab 4: monitoring
+
+A CronJob compares what the ML service served in the last 5 minutes with what its model was trained on, and pushes the result to the Prometheus Pushgateway. Prometheus also scrapes `/metrics` of both services. Grafana shows both on one dashboard, [k8s/grafana/landcover.json](k8s/grafana/landcover.json), which it loads from the repository at start-up. The design is in Section 6.6 of the [design document](docs/design.md).
+
+### What runs
+
+| Object | Image | Job |
+|---|---|---|
+| CronJob `drift-report` | `landcover-monitor:<commit>` (target `monitor` of [docker/serve/Dockerfile](docker/serve/Dockerfile): Evidently 0.7.23, no torch) | `python -m landcover.monitor report` every 5 minutes |
+| Deployment and Service `pushgateway` | `prom/pushgateway:v1.11.4` | holds the last report |
+| Deployment and Service `prometheus` | `prom/prometheus:v3.13.5` | scrapes `ml`, `llm` and the Pushgateway every 15 s ([k8s/prometheus.yml](k8s/prometheus.yml)); keeps 2 days in an `emptyDir` |
+| Deployment and Service `grafana` | `grafana/grafana:13.3.2` | data source and dashboard from [k8s/grafana/](k8s/grafana/); anonymous viewing |
+
+```sh
+alias kubectl="minikube kubectl --"
+kubectl port-forward svc/grafana 3000:3000 &      # http://127.0.0.1:3000/d/landcover
+kubectl port-forward svc/prometheus 9090:9090 &   # http://127.0.0.1:9090
+kubectl port-forward svc/pushgateway 9091:9091 &  # curl -s 127.0.0.1:9091/metrics | grep '^landcover_'
+```
+
+The dashboard cannot be saved from the browser; a change goes into `landcover.json` and the next `make cluster`.
+
+### Reference, labels and replay
+
+The observation unit is a 256×256 quadrant of a sample tile, sent to `/predict`, so the ML service computes the features on both sides of a comparison ([src/landcover/monitor.py](src/landcover/monitor.py)). The header `X-Source-Id` marks what a request is:
+
+| Command | Sends or writes | Source ID |
+|---|---|---|
+| `make reference` | the 256 quadrants of the four training batches, through the service, for the version `champion` names; only those still missing | `reference/<data version>/<batch>/<tile>/q<n>` |
+| `python -m landcover.monitor labels --dsn …` | the crosswalked masks of the 64 quadrants of the development batch D017-2021 into `serving.labels` | key `replay/D017-2021/<tile>/q<n>` |
+| `make replay` | the 128 quadrants of the development and final batches, starting at the next 5-minute boundary so that they fall into one window | `replay/<batch>/<tile>/q<n>` |
+
+`make cluster` runs the first two. Both need the port-forwards of `make cluster` (ML on 8000, MLflow on 5002, PostgreSQL on 5433); `make replay` needs only the ML one. After a promotion and `kubectl rollout restart deployment/ml`, run `make reference` once: until then the new version's reports say `no_reference`. The final batch D073-2022 has no labels, a declared simulation of labels that have not arrived.
+
+### The report
+
+Every 5 minutes the job takes the window of the previous 5 minutes. For each model version served in it, and the version of the latest served request, it compares the `ok` rows that are not reference rows with that version's reference rows:
+
+- **Drift.** Evidently's `DataDriftPreset` with normed Wasserstein distance (in reference standard deviations) on ten columns: the red, green and blue means, brightness, and the shares of the six classes the labels can score (`developed` and `road` have zero variance in the reference). A column with distance ≥ `DRIFT_THRESHOLD` counts as drifted. The threshold is 0.5 for now: the 95th percentile of the worst column between two halves of the training tiles was 0.45. The value for alerting is chosen in the next part of Lab 4.
+- **Quality.** Mean IoU of the six scored classes over the window's rows that have a label, computed as in Lab 2.
+- **Insufficient data.** Fewer than 50 observations on either side, or no reference, gives `insufficient_data` with the reason (`few_observations`, `no_reference`, `incomplete_labels`) instead of a value.
+- **Freshness.** The receive time of the latest served request, next to the Pushgateway's `push_time_seconds`: a job that keeps running while nothing is served shows a growing data age.
+
+Each run replaces one Pushgateway group, `job="landcover-drift"`, so a version that leaves the traffic disappears on the next run:
+
+| Metric | Labels |
+|---|---|
+| `landcover_drift_distance` | `model_version`, `column` |
+| `landcover_drift_columns_drifted`, `landcover_drift_columns_share` | `model_version` |
+| `landcover_drift_threshold` | — |
+| `landcover_report_observations` | `model_version`, `side` (`current`, `reference`, `labelled`) |
+| `landcover_report_insufficient` | `model_version`, `signal` (`drift`, `quality`), `reason` |
+| `landcover_quality_miou` | `model_version` |
+| `landcover_report_window_end_seconds`, `landcover_latest_request_seconds` | — |
+
+A run that cannot reach the Pushgateway fails its Job. With the Pushgateway scaled to 0 the run of 17:15 failed with `urllib.error.URLError: <urlopen error timed out>`, and the run of 17:20 succeeded after it was scaled back.
+
+### Two windows
+
+On the author's cluster (`champion` on the U-Net, version 3, commit `be7e975`), `make replay` was run twice with one empty window between:
+
+```text
+$ make replay
+waiting for the window that starts at 17:25 UTC
+128 ok, window 17:25-17:30 UTC, version ['3']
+$ make replay        # started at 17:30:55
+waiting for the window that starts at 17:35 UTC
+128 ok, window 17:35-17:40 UTC, version ['3']
+$ for j in 29928570 29928575 29928580; do kubectl logs job/drift-report-$j | grep '^window'; done
+window 2026-11-26 17:25-17:30 UTC: {"3": {"observations": {"current": 128, "reference": 256, "labelled": 64}, "drift": "3 drifted", "quality": 0.3345}}
+window 2026-11-26 17:30-17:35 UTC: {"3": {"observations": {"current": 0, "reference": 256, "labelled": 0}, "drift": "few_observations", "quality": "few_observations"}}
+window 2026-11-26 17:35-17:40 UTC: {"3": {"observations": {"current": 128, "reference": 256, "labelled": 64}, "drift": "3 drifted", "quality": 0.3345}}
+```
+
+![Grafana dashboard: two equal drift segments at 17:30 and 17:40 with a gap between them, insufficient data in the empty window, two request bursts, mean IoU 0.33 and the data and job ages](docs/screenshots/grafana-two-windows.png)
+
+The report of the second window as the Pushgateway held it:
+
+```text
+landcover_drift_columns_drifted{instance="",job="landcover-drift",model_version="3"} 3
+landcover_drift_columns_share{instance="",job="landcover-drift",model_version="3"} 0.3
+landcover_drift_distance{column="brightness",instance="",job="landcover-drift",model_version="3"} 0.32180519328040946
+landcover_drift_distance{column="mean_b",instance="",job="landcover-drift",model_version="3"} 0.3250881344999206
+landcover_drift_distance{column="mean_g",instance="",job="landcover-drift",model_version="3"} 0.3303896988836811
+landcover_drift_distance{column="mean_r",instance="",job="landcover-drift",model_version="3"} 0.3495431995693471
+landcover_drift_distance{column="share_agriculture",instance="",job="landcover-drift",model_version="3"} 0.44225584604688717
+landcover_drift_distance{column="share_bareland",instance="",job="landcover-drift",model_version="3"} 0.5246675845220734
+landcover_drift_distance{column="share_building",instance="",job="landcover-drift",model_version="3"} 0.5341230019264545
+landcover_drift_distance{column="share_rangeland",instance="",job="landcover-drift",model_version="3"} 0.5307541354639174
+landcover_drift_distance{column="share_tree",instance="",job="landcover-drift",model_version="3"} 0.10048244293087728
+landcover_drift_distance{column="share_water",instance="",job="landcover-drift",model_version="3"} 0.21236497376004032
+landcover_drift_threshold{instance="",job="landcover-drift"} 0.5
+landcover_latest_request_seconds{instance="",job="landcover-drift"} 1.795714548502374e+09
+landcover_quality_miou{instance="",job="landcover-drift",model_version="3"} 0.3345219486430588
+landcover_report_observations{instance="",job="landcover-drift",model_version="3",side="current"} 128
+landcover_report_observations{instance="",job="landcover-drift",model_version="3",side="labelled"} 64
+landcover_report_observations{instance="",job="landcover-drift",model_version="3",side="reference"} 256
+landcover_report_window_end_seconds{instance="",job="landcover-drift"} 1.7957148e+09
+```
+
+The two replay windows give the same distances because they hold the same images. The held-out batches are other regions and years than the training batches. Without any injected shift, their input features lie 0.32–0.35 reference standard deviations from the reference, inside the range between two halves of the training tiles. The U-Net's predicted shares of bareland, rangeland and building lie 0.52–0.53 away, just above the provisional threshold, so three columns count as drifted before any shift. The development quadrants score a mean IoU of 0.3345. Section 7.2 reports 0.3355 for the same model on the whole development tiles.
+
+Report Jobs, including the failed run of the Pushgateway check:
+
+```text
+$ kubectl get cronjob,jobs
+NAME                         SCHEDULE      TIMEZONE   SUSPEND   ACTIVE   LAST SCHEDULE   AGE
+cronjob.batch/drift-report   */5 * * * *   <none>     False     0        2m59s           125m
+
+NAME                                                                 STATUS     COMPLETIONS   DURATION   AGE
+job.batch/drift-report-29928555                                      Failed     0/1           27m        27m
+job.batch/drift-report-29928570                                      Complete   1/1           7s         12m
+job.batch/drift-report-29928575                                      Complete   1/1           3s         7m59s
+job.batch/drift-report-29928580                                      Complete   1/1           6s         2m59s
+job.batch/retrieval-index-3984c35cb0801116d75df783a44ebeacbd4c715a   Complete   1/1           40s        3h5m
+job.batch/retrieval-index-64b5ff6a9ddc25cccb83b88702c39fdada546e8c   Complete   1/1           42s        177m
+job.batch/retrieval-index-be7e975db7c98e776855b500c99fc5cbc064794d   Complete   1/1           44s        42m
+```
+
+### Memory of the monitoring components
+
+Measured on the same cluster after a 1024×1024 `/predict` and a report on a full window:
+
+| Pod | `memory.peak` | Request / limit |
+|---|---|---|
+| Grafana | 768 MiB, of which 349 MiB anonymous and the rest file cache | 512 / 768 MiB |
+| Prometheus | 92 MiB | 128 / 256 MiB |
+| Pushgateway | 34 MiB | 32 / 64 MiB |
+| Report Job (128 against 256 rows) | 234 MiB | 256 / 512 MiB |
+| Minikube node container, everything ready, `make llm-server` up | 4.51 GiB of 6 GiB (`docker stats`) | — |
+
+Grafana 13 was killed for exceeding a first limit of 256 MiB at start-up; at 768 MiB the kernel reclaims its file cache at the limit and it has not been killed.
+

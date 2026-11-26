@@ -22,7 +22,7 @@ These belong to `add-lab4-drift-alert`. Also out of scope:
   - `make setup`, `make lint` and `make test` pass;
   - `uv run --locked --group monitor python -c "import evidently, pandas; print(evidently.__version__, pandas.__version__)"` prints `0.7.23 2.3.3`;
   - `uv run --locked python -m landcover.tracking seed` against the running cluster's port-forward 5002 still reports the existing champion.
-- [ ] 1.2 Split the first stage of `docker/serve/Dockerfile` into `base` and `deps`, add the target `monitor` (design Decision 9), and make `make images` loop over `ml llm monitor`. After a commit, with `minikube docker-env`, verify:
+- [x] 1.2 Split the first stage of `docker/serve/Dockerfile` into `base` and `deps`, add the target `monitor` (design Decision 9), and make `make images` loop over `ml llm monitor`. After a commit, with `minikube docker-env`, verify:
   - `make images` builds `landcover-monitor:<HEAD>`, and `ml` and `llm` reuse their cached layers;
   - `docker run --rm landcover-monitor:<HEAD> python -c "import evidently, torch"` fails on `torch` only;
   - `docker image inspect` shows the revision label;
@@ -48,7 +48,7 @@ These belong to `add-lab4-drift-alert`. Also out of scope:
   - both pods are ready;
   - with a port-forward on 9090, `curl -s 127.0.0.1:9090/api/v1/targets` shows `ml` and `pushgateway` up, and `llm` up with `make llm-server` running or down without it;
   - `landcover_requests_total` returns series from the query API.
-- [ ] 3.2 Add the CronJob `drift-report` (design Decision 8) and apply it with `COMMIT` substituted. Verify:
+- [x] 3.2 Add the CronJob `drift-report` (design Decision 8) and apply it with `COMMIT` substituted. Verify:
   - a run started by the schedule completes (`kubectl get jobs` lists it with 1/1);
   - `curl -s` of the Pushgateway's `/metrics` shows the series of Decision 7 for the champion version, including `landcover_report_insufficient{reason="few_observations"}` in a window without traffic;
   - after a run with the Pushgateway scaled to 0, the Job is marked failed;
@@ -60,38 +60,38 @@ These belong to `add-lab4-drift-alert`. Also out of scope:
 
 ## 4. Bring-up
 
-- [ ] 4.1 Extend `scripts/cluster.sh` and the Makefile (design Decision 10): the three ConfigMaps, the rollout waits, the PostgreSQL port-forward with a TCP check, `reference` and `labels` after the smoke request, the printed port-forward commands; Makefile targets `replay` and `reference`. After a commit, verify on the running cluster:
+- [x] 4.1 Extend `scripts/cluster.sh` and the Makefile (design Decision 10): the three ConfigMaps, the rollout waits, the PostgreSQL port-forward with a TCP check, `reference` and `labels` after the smoke request, the printed port-forward commands; Makefile targets `replay` and `reference`. After a commit, verify on the running cluster:
   - `make cluster` exits 0, prints the Grafana and Prometheus commands, and its last lines list the monitoring pods as ready;
   - a second run sends no reference request, keeps 64 labels and builds no layer;
   - no port-forward process remains after it exits (`pgrep -f port-forward`).
 - [ ] 4.2 Clean-clone run: clone the pushed branch into the scratchpad, `cp .env.example .env`, ask the author before `minikube delete`, then `time make cluster`. Verify it exits 0 with the monitoring components ready and the reference built. Record the cold and warm durations in the README's bring-up block, replacing the earlier numbers.
-- [ ] 4.3 Update the README "Lab 4: cluster" bring-up list for the new steps and the port-forwards. Verify every changed command runs as written.
+- [x] 4.3 Update the README "Lab 4: cluster" bring-up list for the new steps and the port-forwards. Verify every changed command runs as written.
 
 ## 5. Evidence and documents
 
-- [ ] 5.1 Memory: with the cluster up, after one report run and a 1024×1024 `/predict`, record:
+- [x] 5.1 Memory: with the cluster up, after one report run and a 1024×1024 `/predict`, record:
   - `docker stats --no-stream minikube`;
   - `memory.peak` of each pod, including a completed report Job (read during the run with `kubectl exec` or from its log line);
   - set the requests and limits of design Decision 8 from the measurements.
 
   Verify `kubectl get pods` shows 0 restarts and no `OOMKilled` in `kubectl get events`.
-- [ ] 5.2 Two windows: run `make replay`, let one window pass empty, run `make replay` again, and wait for the report after each window. Verify:
+- [x] 5.2 Two windows: run `make replay`, let one window pass empty, run `make replay` again, and wait for the report after each window. Verify:
   - the three reports give equal distances for the two replay windows and `few_observations` with current 0 for the middle one;
   - mean IoU appears for both replay windows with 64 labelled rows.
 
   Save the dashboard screenshot as `docs/screenshots/grafana-two-windows.png` (time range covering the three windows; panels 1, 2, 4, 6, 7, 8 and 9 visible). Also save one pushed report (`curl -s 127.0.0.1:9091/metrics | grep '^landcover_'`).
-- [ ] 5.3 Add the README section "Lab 4: monitoring" (design Decision 12), with:
+- [x] 5.3 Add the README section "Lab 4: monitoring" (design Decision 12), with:
   - the memory table of 5.1;
   - the captured `kubectl get pods,svc` and `kubectl get cronjob,jobs` with the monitoring components;
   - the screenshot and the report of 5.2.
 
   Replace the pods-and-services capture of "Lab 4: cluster" and remove its sentence "The monitoring components join this list in the next part of Lab 4". Verify every command in the section runs as written on the current commit.
 - [ ] 5.4 Revise Section 6.6 and the same passages in the local `docs/design.uk.md` (design Decision 12). Verify:
-  - `grep -n "PSI\|Population Stability\|10 percentage points\|histogram bin" docs/design.md` finds nothing in Section 6.6;
+  - `grep -n "PSI\|Population Stability\|10 percentage points\|histogram bin" docs/design.md` finds no PSI or 10-point rule and no histogram bins in Section 6.6, only the probe's comparison that names PSI as the rejected test;
   - the section names the metrics, the test, the provisional threshold, the schedule and window, the reference, the labels and the freshness signal;
   - `git check-ignore docs/design.uk.md` succeeds;
   - re-applying the manifest on the new commit leaves the retrieval index version unchanged (the index Job prints the same version).
-- [ ] 5.5 Add the scorecard row "Monitoring scheduled", linking the CronJob and the dashboard blocks of "Lab 4: monitoring". Verify each link resolves to an existing heading.
+- [x] 5.5 Add the scorecard row "Monitoring scheduled", linking the CronJob and the dashboard blocks of "Lab 4: monitoring". Verify each link resolves to an existing heading.
 
 ## 6. Integration check
 

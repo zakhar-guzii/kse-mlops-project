@@ -312,8 +312,8 @@ spec:
             httpGet: {path: /-/ready, port: 9090}
             periodSeconds: 10
           resources:
-            requests: {memory: 256Mi, cpu: 100m}
-            limits: {memory: 512Mi}
+            requests: {memory: 128Mi, cpu: 100m}
+            limits: {memory: 256Mi}
           volumeMounts:
             - {name: config, mountPath: /etc/prometheus, readOnly: true}
             # ponytail: emptyDir, the series are lost with the pod; add a PVC if history must survive restarts.
@@ -358,10 +358,10 @@ spec:
           readinessProbe:
             httpGet: {path: /api/health, port: 3000}
             periodSeconds: 10
-          # Grafana 13 was OOM-killed at start with a 256 Mi limit.
+          # Grafana 13 was OOM-killed at start with a 256 Mi limit and peaked at 511 Mi (README, Lab 4: monitoring).
           resources:
-            requests: {memory: 256Mi, cpu: 100m}
-            limits: {memory: 512Mi}
+            requests: {memory: 512Mi, cpu: 100m}
+            limits: {memory: 768Mi}
           volumeMounts:
             - {name: provisioning, mountPath: /etc/grafana/provisioning/datasources/datasource.yml,
                subPath: datasource.yml, readOnly: true}
@@ -415,6 +415,7 @@ spec:
                 - {name: DRIFT_THRESHOLD, value: "0.5"}
                 - name: WAREHOUSE_DSN
                   valueFrom: {secretKeyRef: {name: landcover, key: WAREHOUSE_DSN}}
+              # Measured peak 234 Mi on a window of 128 rows against 256 reference rows.
               resources:
-                requests: {memory: 512Mi, cpu: 100m}
-                limits: {memory: 1Gi}
+                requests: {memory: 256Mi, cpu: 100m}
+                limits: {memory: 512Mi}

@@ -168,9 +168,9 @@ Appended to `k8s/landcover.yaml`; the three generated ConfigMaps are created in 
 | Object | Image | Memory request / limit | Notes |
 |---|---|---|---|
 | Deployment and Service `pushgateway:9091` | `prom/pushgateway:v1.11.4` | 32 / 64 Mi | readiness `GET /-/ready`; no persistence, so a restart empties it until the next run |
-| Deployment and Service `prometheus:9090` | `prom/prometheus:v3.13.5` | 256 / 512 Mi | config from ConfigMap `prometheus` (`k8s/prometheus.yml`); `--storage.tsdb.retention.time=2d`; TSDB on an `emptyDir`; readiness `GET /-/ready` |
-| Deployment and Service `grafana:3000` | `grafana/grafana:13.3.2` | 128 / 256 Mi | ConfigMaps `grafana-provisioning` (data source, dashboard provider) and `grafana-dashboards` (`landcover.json`); anonymous Viewer; readiness `GET /api/health` |
-| CronJob `drift-report` | `landcover-monitor:COMMIT` | 512 Mi / 1 Gi | `*/5 * * * *`, `concurrencyPolicy: Forbid`, `startingDeadlineSeconds: 120`, `backoffLimit: 0`, history limits 3 and 3; `envFrom` ConfigMap `landcover`, `WAREHOUSE_DSN` from the Secret |
+| Deployment and Service `prometheus:9090` | `prom/prometheus:v3.13.5` | 128 / 256 Mi (measured peak 92 Mi) | config from ConfigMap `prometheus` (`k8s/prometheus.yml`); `--storage.tsdb.retention.time=2d`; TSDB on an `emptyDir`; readiness `GET /-/ready` |
+| Deployment and Service `grafana:3000` | `grafana/grafana:13.3.2` | 512 / 768 Mi (OOM-killed at start with 256 Mi; measured peak 768 Mi, of which 349 Mi anonymous) | ConfigMaps `grafana-provisioning` (data source, dashboard provider) and `grafana-dashboards` (`landcover.json`); anonymous Viewer; readiness `GET /api/health` |
+| CronJob `drift-report` | `landcover-monitor:COMMIT` | 256 / 512 Mi (measured peak 234 Mi) | `*/5 * * * *`, `concurrencyPolicy: Forbid`, `startingDeadlineSeconds: 120`, `backoffLimit: 0`, history limits 3 and 3; `envFrom` ConfigMap `landcover`, `WAREHOUSE_DSN` from the Secret |
 
 `k8s/prometheus.yml`: `scrape_interval: 15s`. Jobs `ml` (`ml:8000`), `llm` (`llm:8000`) and `pushgateway` (`pushgateway:9091`, `honor_labels: true`), all with `static_configs`.
 
@@ -190,7 +190,7 @@ Panels:
 8. `landcover_quality_miou`.
 9. Data age and job age.
 
-Memory: new requests 928 Mi and limits 1,856 Mi; expected steady use about 0.4 GiB plus the job's peak while it runs. Measured in task 5 and recorded in the README.
+Memory, as measured in task 5.1: requests 928 Mi and limits 1,600 Mi in all. The node container used 4.51 GiB of 6 GiB with everything ready and `make llm-server` up. Grafana 13 needs more than planned: it was OOM-killed at start with a 256 Mi limit.
 
 Alternative: kube-prometheus-stack. Rejected: it needs Helm and adds an operator, node-exporter and kube-state-metrics to a node with about 1.7 GiB left.
 
