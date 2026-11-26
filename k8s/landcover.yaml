@@ -171,9 +171,10 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
+          # Measured peak 1,476 MiB: the random forest on a 1024x1024 image.
           resources:
             requests: {memory: 1Gi, cpu: 500m}
-            limits: {memory: 1536Mi}
+            limits: {memory: 2Gi}
 ---
 apiVersion: v1
 kind: Service

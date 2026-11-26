@@ -113,7 +113,7 @@ Alternative: SQLite and a file store on one PVC with the plain official image. R
 | Startup probe | none: liveness checks only the process, which answers at once | `GET /health/live` every 2 s, 60 failures (2 min) |
 | Readiness | `GET /health/ready` every 5 s, timeout 5 s | `GET /health/ready` every 5 s, timeout 5 s (two 2 s checks) |
 | Liveness | `GET /health/live` every 10 s, 3 failures | same |
-| Memory request / limit | 1 Gi / 1536 Mi | 1 Gi / 1536 Mi |
+| Memory request / limit | 1 Gi / 2 Gi (measured peak 1,476 MiB: the forest on 1024×1024) | 1 Gi / 1536 Mi (measured peak 861 MiB) |
 | CPU request | 500m | 250m |
 
 Both use `imagePullPolicy: IfNotPresent` and the default RollingUpdate. With one replica the default allows one extra pod and none unavailable, so a new pod that never becomes ready leaves the old one serving. The missing-model evidence relies on this.
@@ -126,7 +126,7 @@ No CPU limit: the image already pins one torch thread, and a limit would only ad
 | mlflow | 512 Mi / 1 Gi | 100m |
 | retrieval-index Job | 1 Gi / 1536 Mi | 500m |
 
-Group 3 of the tasks measures these figures and corrects them.
+Measured peaks (task 3.3): postgres 131 MiB, mlflow 402 MiB; the ML limit was raised from the planned 1536 Mi after the forest peaked at 96% of it.
 
 ### 5. ConfigMap and Secret
 
