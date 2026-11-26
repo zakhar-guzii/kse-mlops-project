@@ -91,7 +91,7 @@ Out of scope:
   - replace the pods-and-services capture with one that includes `alertmanager` and `mailpit`.
 
   Verify that every link in the five Lab 4 rows resolves to a README section, file or image.
-- [ ] 6.2 Cold bring-up on a clean clone at the final commit (`cp .env.example .env`, a new Minikube profile, no images). Verify:
+- [x] 6.2 Cold bring-up on a clean clone at the final commit (`cp .env.example .env`, a new Minikube profile, no images). Verify:
   - `make cluster` exits 0, and the duration and the three slowest steps are recorded in the README's bring-up table and the "One command" row;
   - `make drift-demo` on that cluster delivers the drift email.
 - [ ] 6.3 Integration check:

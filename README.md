@@ -23,7 +23,7 @@ Lab 3 adds the GIS assistant's documentation answers: a versioned retrieval inde
 | Services containerized | `make images` builds both images from `git archive HEAD`, tagged with the full commit, and refuses uncommitted changes ([Build](#build)) | Lab 4 |
 | Services deployed with health contracts | Both services, MLflow, PostgreSQL and the monitoring and alerting components ready on Minikube ([Pods and services](#pods-and-services)); with the alias missing the ML pod stays 0/1 and out of the Service's endpoints ([Missing model in the cluster](#missing-model-in-the-cluster)); a promotion and a restart change the reported version with the same image ([Promotion in the cluster](#promotion-in-the-cluster)) | Lab 4 |
 | Monitoring scheduled | A CronJob reports every 5 minutes: drift of the served window against the training reference per input feature and predicted class share, mean IoU on labelled quadrants, insufficient data and data age, pushed to Prometheus; the Grafana dashboard from the repository shows two windows ([Lab 4: monitoring](#lab-4-monitoring), [Two windows](#two-windows)). Prometheus evaluates five alert rules on the report, data and job freshness and service health, checked by `promtool` against synthetic series; Alertmanager emails every alert to the operator's mailbox in Mailpit ([Rules](#rules), [Channel](#channel), [Checking the rules](#checking-the-rules)) | Lab 4 |
-| One command brings the system up | `make cluster` from a clean clone starts Minikube, deploys every component, seeds the registry, passes a smoke request to `/predict` and deploys the monitoring and alerting components, with the mailbox address printed, in 8 minutes cold and 13 s repeated; a repeated run leaves Prometheus, Alertmanager and the mailbox untouched ([Bring-up](#bring-up)) | Lab 4 |
+| One command brings the system up | `make cluster` from a clean clone starts Minikube, deploys every component, seeds the registry, passes a smoke request to `/predict` and deploys the monitoring and alerting components, with the mailbox address printed, in 7 minutes cold (396 s; slowest: data sample, images, registry seed) and 13 s repeated; a repeated run leaves Prometheus, Alertmanager and the mailbox untouched ([Bring-up](#bring-up)) | Lab 4 |
 | Drift signal reaches a human | `make drift-demo` darkens 64 of 128 held-out quadrants by 0.5 through `/predict` ([The shift](#the-shift)); the brightness distance goes from 0.322 to 0.631 against the threshold 0.5 on the dashboard, and `BrightnessDrift` lands in the operator's mailbox 5 min 46 s after the shifted window started, with the model unchanged ([Demonstration](#demonstration), [Grafana](docs/screenshots/grafana-drift-alert.png), [email](docs/screenshots/mailpit-drift-alert.png)) | Lab 4 |
 
 ## Lab 1 status
@@ -767,48 +767,52 @@ The command:
 
 When `make llm-server` is running on the host, the command also waits for the LLM service and asks it one question. Otherwise it says why the LLM service cannot be ready and still succeeds.
 
-The cold run from a clean clone (`cp .env.example .env`), with a new Minikube profile and no images in it, at commit `dcd039c` (build, download and apply lines left out):
+The cold run from a clean clone (`cp .env.example .env`), with a new Minikube profile (`MINIKUBE_PROFILE=cold`) and no images in it, at commit `6d34a61`, with `make llm-server` running (build, download and apply lines left out):
 
 ```text
 == minikube (at 0 s)
-== images, built by Minikube's Docker daemon (at 20 s)
-== data sample (at 153 s)
-== manifests (at 364 s)
+== images, built by Minikube's Docker daemon (at 21 s)
+== data sample (at 147 s)
+== manifests (at 282 s)
 deployment "postgres" successfully rolled out
 deployment "mlflow" successfully rolled out
-pod/mlflow-6cc95db77b-mff67 condition met
-== registry (at 390 s)
-run 1c83ec71c1bd4fd18bd95d264f56de7f: development mIoU 0.0456 (recorded 0.0456)
-landcover-segmenter version 1: run 1c83ec71c1bd4fd18bd95d264f56de7f, data_version 6a0c8cc2708d6616c0bfb9f3f5095708.dir, git_commit dcd039cf598bfbb28c7649a8292fdbe975939b42; predicted a 512x512 mask
-run ed4a6ebc1d3d49279ba9af971d8b9d45: development mIoU 0.1478 (recorded 0.1478)
-landcover-segmenter version 2: run ed4a6ebc1d3d49279ba9af971d8b9d45, data_version 6a0c8cc2708d6616c0bfb9f3f5095708.dir, git_commit dcd039cf598bfbb28c7649a8292fdbe975939b42; predicted a 512x512 mask
+pod/mlflow-6cc95db77b-4g4zn condition met
+== registry (at 303 s)
+run 56d16ae51ed546158b7b086a398173d2: development mIoU 0.0456 (recorded 0.0456)
+landcover-segmenter version 1: run 56d16ae51ed546158b7b086a398173d2, data_version 6a0c8cc2708d6616c0bfb9f3f5095708.dir, git_commit 6d34a6133894700fc7b91d4b75b0bd40e85ba804; predicted a 512x512 mask
+run c79765c9d3c24b09b085127c1f3dc5d3: development mIoU 0.1478 (recorded 0.1478)
+landcover-segmenter version 2: run c79765c9d3c24b09b085127c1f3dc5d3, data_version 6a0c8cc2708d6616c0bfb9f3f5095708.dir, git_commit 6d34a6133894700fc7b91d4b75b0bd40e85ba804; predicted a 512x512 mask
 landcover-segmenter@champion -> version 2
-== retrieval index (at 444 s)
-job.batch/retrieval-index-dcd039cf598bfbb28c7649a8292fdbe975939b42 condition met
-== ML service (at 444 s)
+== retrieval index (at 358 s)
+job.batch/retrieval-index-6d34a6133894700fc7b91d4b75b0bd40e85ba804 condition met
+== ML service (at 359 s)
 deployment "ml" successfully rolled out
-smoke /predict: landcover-segmenter version 2 (champion), image dcd039cf598bfbb28c7649a8292fdbe975939b42
-== drift reference and labels (at 455 s)
+smoke /predict: landcover-segmenter version 2 (champion), image 6d34a6133894700fc7b91d4b75b0bd40e85ba804
+== drift reference and labels (at 370 s)
 reference of version 2: 256 quadrants sent, 256 in all
 labels: 64 quadrants of D017-2021, 64 in the table
-== monitoring (at 475 s)
+== monitoring and alerting (at 390 s)
 deployment "pushgateway" successfully rolled out
 deployment "prometheus" successfully rolled out
 deployment "grafana" successfully rolled out
-== LLM service (at 475 s)
-llm not ready: no text model server on 127.0.0.1:8081 (make llm-server)
+deployment "alertmanager" successfully rolled out
+deployment "mailpit" successfully rolled out
+== LLM service (at 390 s)
+deployment "llm" successfully rolled out
+smoke /ask: gemma-4-12b-it-qat-q4_0, index 5570e99ba60e, sources ['export-contract']
 dashboard: minikube kubectl -- port-forward svc/grafana 3000:3000, then http://127.0.0.1:3000/d/landcover
 metrics:   minikube kubectl -- port-forward svc/prometheus 9090:9090, then http://127.0.0.1:9090
-took 475 s
+mailbox:   minikube kubectl -- port-forward svc/mailpit 8025:8025, then http://127.0.0.1:8025
+took 396 s
 ```
 
 | Run | Duration |
 |---|---|
-| Cold: clean clone, new Minikube profile, no images or data | **475 s (8 min)** |
-| Repeated on the same commit: nothing built, registered, indexed or sent for the reference | 13 s |
+| Cold: clean clone, new Minikube profile, no images or data | **396 s (7 min)** |
+| Repeated on the same commit: nothing built, registered, indexed or sent for the reference; Prometheus, Alertmanager and Mailpit keep their pods | 13 s |
 | After a new commit: the last image layers and a new index Job | about 1 minute (60 s) |
 
-The three slowest cold steps are the data sample (211 s: 192 files from Hugging Face over range requests), the images (133 s: the base images, the locked packages with the CPU build of torch, the 471 MB embedding model and the drift job's Evidently, all downloaded into Minikube) and the registry seed (54 s: training and registering two models). The index Job runs during the seed, and the monitoring images are pulled while the earlier steps run. The drift reference of the random forest takes 20 s. The Minikube base image was already cached by Docker Desktop. Without it, the first start pulls about 500 MB more. The first cold run, at commit `3984c35` before the monitoring components, took 662 s, mostly because its image step downloaded more (339 s).
+The three slowest cold steps are the data sample (135 s: 192 files from Hugging Face over range requests), the images (126 s: the base images, the locked packages with the CPU build of torch, the 471 MB embedding model and the drift job's Evidently, all downloaded into Minikube) and the registry seed (55 s: training and registering two models). The data sample and the images do not depend on each other and could run in parallel; the images are cached by Minikube's Docker daemon after the first run, and the sample by DVC's cache. The index Job runs during the seed, and the monitoring and alerting images are pulled while the earlier steps run. The Minikube base image was already cached by Docker Desktop. Without it, the first start pulls about 500 MB more. Earlier cold runs took 662 s at `3984c35`, before the monitoring components, and 475 s at `dcd039c`. On the same cluster `make drift-demo` delivered the `BrightnessDrift` email for the random forest (version 2) at 22:15:45, 5 min 46 s after the shifted window started, with the same brightness distance 0.631: brightness does not depend on the model.
 
 A run on a new commit deploys the new images and builds the index again with a Job named after the commit. Completed Jobs of earlier commits stay listed; `kubectl delete job -l app=retrieval-index` removes them. PostgreSQL takes its password from `.env` only on the first start of its volume. After changing `POSTGRES_PASSWORD`, run `minikube delete` before `make cluster`. `minikube stop` keeps the cluster, the registry and the index for the next `make cluster`; `minikube delete` removes all of them.
 
@@ -1087,7 +1091,7 @@ landcover_report_observations{instance="",job="landcover-drift",model_version="3
 landcover_report_window_end_seconds{instance="",job="landcover-drift"} 1.7957148e+09
 ```
 
-The two replay windows give the same distances because they hold the same images. The held-out batches are other regions and years than the training batches. Without any injected shift, their input features lie 0.32–0.35 reference standard deviations from the reference, inside the range between two halves of the training tiles. The U-Net's predicted shares of bareland, rangeland and building lie 0.52–0.53 away, just above the provisional threshold, so three columns count as drifted before any shift. The development quadrants score a mean IoU of 0.3345. Section 7.2 reports 0.3355 for the same model on the whole development tiles.
+The two replay windows give the same distances because they hold the same images. The held-out batches are other regions and years than the training batches. Without any injected shift, their input features lie 0.32–0.35 reference standard deviations from the reference, inside the range between two halves of the training tiles. The U-Net's predicted shares of bareland, rangeland and building lie 0.52–0.53 away, just above the threshold of 0.5, so three columns count as drifted before any shift. The development quadrants score a mean IoU of 0.3345. Section 7.2 reports 0.3355 for the same model on the whole development tiles.
 
 Report Jobs, including the failed run of the Pushgateway check:
 
@@ -1225,12 +1229,14 @@ Before and after, `/health/ready` reported `model_version` 3 and the same image 
 
 ### Memory of the alerting components
 
-`memory.peak` after the demonstration:
+`memory.peak` after the demonstration and the [benchmarks](#lab-4-benchmarks):
 
 | Pod | `memory.peak` | Request / limit |
 |---|---|---|
-| Alertmanager | 29 MiB | 32 / 64 MiB |
-| Mailpit, two emails | 47 MiB | 32 / 128 MiB |
+| Alertmanager | 30 MiB | 32 / 64 MiB |
+| Mailpit, three emails | 54 MiB | 32 / 128 MiB |
+
+Both stay well inside their first limits, which are kept.
 
 ### The operator's first ten minutes
 
