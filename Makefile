@@ -1,4 +1,4 @@
-.PHONY: setup lint test up down airflow-password data pull-data train import register champion reproduce train-remote retrieval-index retrieval-eval llm-server answer-eval images
+.PHONY: setup lint test up down airflow-password sample data pull-data train import register champion reproduce train-remote retrieval-index retrieval-eval llm-server answer-eval images cluster
 
 # Credentials for DVC and Compose come from the untracked .env (see .env.example).
 -include .env
@@ -26,11 +26,14 @@ down:
 airflow-password:
 	docker compose exec airflow cat /opt/airflow/simple_auth_manager_passwords.json.generated
 
-# Fetch the sample from the source, fail unless it hashes to the committed data/raw.dvc, seed the store.
-data:
+# Fetch the sample from the source and fail unless it hashes to the committed data/raw.dvc.
+# make data also seeds the Compose store; make cluster needs only the sample.
+sample:
 	uv run --locked python scripts/fetch_sample.py
 	uv run --locked dvc commit -f -q data/raw.dvc
 	git diff --exit-code HEAD -- data/raw.dvc
+
+data: sample
 	uv run --locked dvc push
 
 pull-data:
@@ -77,7 +80,8 @@ retrieval-eval:
 
 # Lab 3: the text model. Builds llama-server at the pinned llama.cpp release once (Xcode command line tools;
 # CMake comes from PyPI through uvx), downloads the pinned GGUF file once (6.98 GB, resumable), checks its
-# SHA-256 on every start, then runs the server in the foreground on 127.0.0.1:8081.
+# SHA-256 on every start, then runs the server in the foreground on 127.0.0.1:8081. The prompt cache is capped at
+# 2 GiB so the server fits next to Minikube (Lab 4); it only reuses evaluated prefixes, answers are unchanged.
 # --alias must equal model in the [llm] table of retrieval.toml.
 LLAMA_TAG = b12359
 LLAMA_COMMIT = b1b770d90
@@ -105,7 +109,7 @@ $(LLM_FILE):
 llm-server: $(LLAMA_SERVER) $(LLM_FILE)
 	echo "$(LLM_SHA256)  $(LLM_FILE)" | shasum -a 256 -c
 	$(LLAMA_SERVER) -m $(LLM_FILE) --alias gemma-4-12b-it-qat-q4_0 \
-		--host 127.0.0.1 --port 8081 --ctx-size 8192 --parallel 1
+		--host 127.0.0.1 --port 8081 --ctx-size 8192 --parallel 1 --cache-ram 2048
 
 # Answer eval/questions.toml with prompts/plain.md and no retrieval, judge each answer with prompts/judge.md,
 # and log one run to MLflow (experiment landcover-answers). Needs make llm-server and a clean tree.
@@ -123,3 +127,12 @@ images:
 		git archive HEAD | docker build --target $$target --build-arg GIT_COMMIT=$$(git rev-parse HEAD) \
 			-t landcover-$$target:$$(git rev-parse HEAD) -f docker/serve/Dockerfile - || exit 1; \
 	done
+
+# Lab 4: one command from a clean clone. Starts Minikube, builds the images of HEAD in its Docker daemon, fetches
+# the data sample, deploys PostgreSQL, MLflow and both services (k8s/landcover.yaml), seeds an empty registry,
+# builds the retrieval index and sends a smoke request to /predict (and /ask when make llm-server is running).
+MINIKUBE_MEMORY ?= 6144
+MINIKUBE_CPUS ?= 4
+
+cluster:
+	scripts/cluster.sh

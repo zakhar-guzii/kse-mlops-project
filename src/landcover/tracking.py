@@ -122,11 +122,29 @@ def register(run_id):
     print(f"{MODEL_NAME} version {mv.version}: run {run_id}, data_version"
           f" {tags['data_version']}, git_commit {tags['git_commit']};"
           f" predicted a {mask.shape[0]}x{mask.shape[1]} mask")
+    return mv.version
 
 
 def champion(version_):
     MlflowClient().set_registered_model_alias(MODEL_NAME, "champion", version_)
     print(f"{MODEL_NAME}@champion -> version {version_}")
+
+
+def seed():
+    """An empty registry gets the rule and the forest, and champion points at the forest."""
+    try:
+        version_ = MlflowClient().get_model_version_by_alias(MODEL_NAME, "champion").version
+        print(f"{MODEL_NAME}@champion is version {version_}; nothing registered")
+        return
+    except MlflowException as error:
+        if error.error_code not in ("RESOURCE_DOES_NOT_EXIST", "INVALID_PARAMETER_VALUE"):
+            raise
+    versions = []
+    for kind in ("rule", "rf"):
+        result = subprocess.run([sys.executable, "-m", "landcover.train", kind], cwd=ROOT,
+                                check=True, stdout=subprocess.PIPE, text=True).stdout.split()[-1]
+        versions.append(register(log(ROOT / result)))
+    champion(versions[-1])
 
 
 def check_data_version(dvc_file, tag):
@@ -225,6 +243,7 @@ def main(argv=None):
     p.add_argument("--tag", action="append", default=[], metavar="KEY=VALUE")
     sub.add_parser("register").add_argument("run_id")
     sub.add_parser("champion").add_argument("version")
+    sub.add_parser("seed")
     reproduce_parser = sub.add_parser("reproduce")
     reproduce_parser.add_argument("version")
     reproduce_parser.add_argument("--gpu", choices=GPUS)
@@ -241,6 +260,8 @@ def main(argv=None):
         register(args.run_id)
     elif args.command == "champion":
         champion(args.version)
+    elif args.command == "seed":
+        seed()
     else:
         reproduce(args.version, args.gpu)
 

@@ -63,6 +63,36 @@ def test_registration_removes_the_new_version_when_loading_fails(monkeypatch):
     client.delete_model_version.assert_called_once_with(tracking.MODEL_NAME, "17")
 
 
+def test_seed_fills_only_an_empty_registry(monkeypatch):
+    from mlflow.exceptions import MlflowException
+    from mlflow.protos.databricks_pb2 import INTERNAL_ERROR, INVALID_PARAMETER_VALUE
+
+    client = Mock()
+    monkeypatch.setattr(tracking, "MlflowClient", lambda: client)
+    trained = []
+    monkeypatch.setattr(tracking.subprocess, "run", lambda cmd, **_: (
+        trained.append(cmd[-1]) or SimpleNamespace(stdout=f"runs/{cmd[-1]}-abc\n")))
+    monkeypatch.setattr(tracking, "log", lambda result: f"run-{result.name}")
+    monkeypatch.setattr(tracking, "register", lambda run: {"run-rule-abc": "1", "run-rf-abc": "2"}[run])
+    promoted = []
+    monkeypatch.setattr(tracking, "champion", promoted.append)
+
+    client.get_model_version_by_alias.return_value = SimpleNamespace(version="2")
+    tracking.seed()
+    assert trained == [] and promoted == []
+
+    client.get_model_version_by_alias.side_effect = MlflowException(
+        "Registered model alias champion not found.", error_code=INVALID_PARAMETER_VALUE)
+    tracking.seed()
+    assert trained == ["rule", "rf"] and promoted == ["2"]
+
+    client.get_model_version_by_alias.side_effect = MlflowException(
+        "connection refused", error_code=INTERNAL_ERROR)
+    with pytest.raises(MlflowException, match="connection refused"):
+        tracking.seed()
+    assert trained == ["rule", "rf"]
+
+
 def test_colab_receives_the_launchers_gpu_option(tmp_path, monkeypatch):
     commit = "0123456789"
     model_file = tmp_path / "model.pt"

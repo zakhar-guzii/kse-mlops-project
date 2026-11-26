@@ -1,0 +1,248 @@
+# Lab 4 cluster (openspec add-lab4-cluster, design Decisions 2-8). Applied by scripts/cluster.sh, which replaces
+# COMMIT with the full SHA of HEAD and creates the Secret `landcover` and the ConfigMap `postgres-init` from .env
+# and sql/warehouse.sql. Memory requests and limits are the measured footprints with a margin (README, Lab 4: cluster).
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: landcover
+data:
+  MLFLOW_TRACKING_URI: http://mlflow:5000
+  MODEL_NAME: landcover-segmenter
+  MODEL_ALIAS: champion
+  LLM_BASE_URL: http://host.minikube.internal:8081/v1
+---
+# PostgreSQL with pgvector: databases landcover (serving, retrieval) and mlflow, created by sql/warehouse.sql.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres
+  labels: {app: postgres}
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: {requests: {storage: 2Gi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  labels: {app: postgres}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: postgres}}
+  template:
+    metadata: {labels: {app: postgres}}
+    spec:
+      containers:
+        - name: postgres
+          image: pgvector/pgvector:0.8.7-pg16-trixie
+          env:
+            - {name: POSTGRES_DB, value: landcover}
+            - {name: PGDATA, value: /var/lib/postgresql/data/pgdata}
+            - name: POSTGRES_USER
+              valueFrom: {secretKeyRef: {name: landcover, key: POSTGRES_USER}}
+            - name: POSTGRES_PASSWORD
+              valueFrom: {secretKeyRef: {name: landcover, key: POSTGRES_PASSWORD}}
+          ports: [{containerPort: 5432}]
+          # Over TCP: the server that runs the init scripts listens only on the socket.
+          readinessProbe:
+            exec: {command: [sh, -c, 'pg_isready -h 127.0.0.1 -U "$POSTGRES_USER" -d landcover']}
+            periodSeconds: 5
+          resources:
+            requests: {memory: 128Mi, cpu: 100m}
+            limits: {memory: 512Mi}
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql/data}
+            - {name: init, mountPath: /docker-entrypoint-initdb.d, readOnly: true}
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: postgres}
+        - name: init
+          configMap: {name: postgres-init}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels: {app: postgres}
+spec:
+  selector: {app: postgres}
+  ports: [{port: 5432}]
+---
+# MLflow: metadata in PostgreSQL, model files proxied to the volume; one worker (Lab 4 Notes).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mlflow-artifacts
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: {requests: {storage: 2Gi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mlflow
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: mlflow}}
+  template:
+    metadata: {labels: {app: mlflow}}
+    spec:
+      containers:
+        - name: mlflow
+          image: landcover-mlflow:3.16.1
+          imagePullPolicy: IfNotPresent
+          command: [mlflow, server]
+          args:
+            - --host=0.0.0.0
+            - --port=5000
+            - --workers=1
+            - --backend-store-uri=$(MLFLOW_BACKEND_URI)
+            - --artifacts-destination=/mlartifacts
+            # The Service name for pods, the port-forward of scripts/cluster.sh for the host.
+            - --allowed-hosts=mlflow:5000,mlflow.default.svc.cluster.local:5000,localhost:5002,127.0.0.1:5002
+          env:
+            - name: MLFLOW_BACKEND_URI
+              valueFrom: {secretKeyRef: {name: landcover, key: MLFLOW_BACKEND_URI}}
+          ports: [{containerPort: 5000}]
+          startupProbe:
+            httpGet: {path: /health, port: 5000}
+            periodSeconds: 5
+            failureThreshold: 36
+          readinessProbe:
+            httpGet: {path: /health, port: 5000}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /health, port: 5000}
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            requests: {memory: 512Mi, cpu: 100m}
+            limits: {memory: 1Gi}
+          volumeMounts:
+            - {name: artifacts, mountPath: /mlartifacts}
+      volumes:
+        - name: artifacts
+          persistentVolumeClaim: {claimName: mlflow-artifacts}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mlflow
+spec:
+  selector: {app: mlflow}
+  ports: [{port: 5000}]
+---
+# ML service: the model by name and alias from the registry; ready only when it is loaded.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ml
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: ml}}
+  template:
+    metadata: {labels: {app: ml}}
+    spec:
+      containers:
+        - name: ml
+          image: landcover-ml:COMMIT
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: {name: landcover}
+          env:
+            - name: WAREHOUSE_DSN
+              valueFrom: {secretKeyRef: {name: landcover, key: WAREHOUSE_DSN}}
+          ports: [{containerPort: 8000}]
+          # No startup probe: the server answers at once and loads the model in the background.
+          readinessProbe:
+            httpGet: {path: /health/ready, port: 8000}
+            periodSeconds: 5
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet: {path: /health/live, port: 8000}
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests: {memory: 1Gi, cpu: 500m}
+            limits: {memory: 1536Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ml
+spec:
+  selector: {app: ml}
+  ports: [{port: 8000}]
+---
+# LLM service: the Lab 3 retriever and prompt in the image, the text model on the host.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llm
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: llm}}
+  template:
+    metadata: {labels: {app: llm}}
+    spec:
+      containers:
+        - name: llm
+          image: landcover-llm:COMMIT
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: {name: landcover}
+          env:
+            - name: WAREHOUSE_DSN
+              valueFrom: {secretKeyRef: {name: landcover, key: WAREHOUSE_DSN}}
+          ports: [{containerPort: 8000}]
+          # The embedding model loads before the server accepts connections.
+          startupProbe:
+            httpGet: {path: /health/live, port: 8000}
+            periodSeconds: 2
+            failureThreshold: 60
+          readinessProbe:
+            httpGet: {path: /health/ready, port: 8000}
+            periodSeconds: 5
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet: {path: /health/live, port: 8000}
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests: {memory: 1Gi, cpu: 250m}
+            limits: {memory: 1536Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llm
+spec:
+  selector: {app: llm}
+  ports: [{port: 8000}]
+---
+# The retrieval index of the LLM image's corpus and settings; one Job per commit, so a repeated run does nothing.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: retrieval-index-COMMIT
+  labels: {app: retrieval-index}
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: index
+          image: landcover-llm:COMMIT
+          imagePullPolicy: IfNotPresent
+          command: [python, -m, landcover.retrieval, index]
+          env:
+            - name: WAREHOUSE_DSN
+              valueFrom: {secretKeyRef: {name: landcover, key: WAREHOUSE_DSN}}
+          resources:
+            requests: {memory: 1Gi, cpu: 500m}
+            limits: {memory: 1536Mi}

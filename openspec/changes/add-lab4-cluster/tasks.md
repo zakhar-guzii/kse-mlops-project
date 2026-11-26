@@ -12,13 +12,13 @@ Out of scope for this change:
 
 ## 1. Cluster and images
 
-- [ ] 1.1 Ask the author before deleting the existing `minikube` profile, which comes from the host check and was created with 4 GB. Then start Minikube with the flags of design Decision 10 and the defaults 6144 MB and 4 CPUs, after checking that Docker Desktop's memory allows it. Verify `minikube kubectl -- version` reports server v1.30.0 and `minikube profile list` shows runtime docker. Verify `minikube kubectl -- run dns --rm -it --image=busybox:1.36 --restart=Never -- nslookup host.minikube.internal` resolves.
+- [x] 1.1 Ask the author before deleting the existing `minikube` profile, which comes from the host check and was created with 4 GB. Then start Minikube with the flags of design Decision 10 and the defaults 6144 MB and 4 CPUs, after checking that Docker Desktop's memory allows it. Verify `minikube kubectl -- version` reports server v1.30.0 and `minikube profile list` shows runtime docker. Verify `minikube kubectl -- run dns --rm -it --image=busybox:1.36 --restart=Never -- nslookup host.minikube.internal` resolves.
 - [ ] 1.2 With `eval "$(minikube docker-env)"`, run `make images` and `docker build -t landcover-mlflow:3.16.1 docker/mlflow`. Verify `minikube image ls` lists `landcover-ml:<HEAD>`, `landcover-llm:<HEAD>` and `landcover-mlflow:3.16.1`, and a second `make images` reuses every layer. If BuildKit's cache mount fails against Minikube's daemon, switch design Decisions 7 and 10 to building on Docker Desktop with `minikube image load`, record why in design.md, and verify the same listing.
 
 ## 2. Data sample and registry seed
 
-- [ ] 2.1 Split `make data` into `sample` (fetch, `dvc commit`, `git diff --exit-code`) and `data: sample` plus `dvc push`, as in design Decision 10. Verify `make sample` on the existing `data/raw` downloads nothing and succeeds, and `make data` with Compose up still pushes. Verify the README "Raw data" section still describes `make data` correctly and mentions `make sample`.
-- [ ] 2.2 Add `seed` to `src/landcover/tracking.py` and make `register` return the version, as in design Decision 9. Add the test to `tests/test_training_and_tracking.py`. Verify `make test` passes, and that the test shows an existing alias trains nothing, a missing alias trains `rule` then `rf` and promotes the second version, and another registry error is raised.
+- [x] 2.1 Split `make data` into `sample` (fetch, `dvc commit`, `git diff --exit-code`) and `data: sample` plus `dvc push`, as in design Decision 10. Verify `make sample` on the existing `data/raw` downloads nothing and succeeds, and `make data` with Compose up still pushes. Verify the README "Raw data" section still describes `make data` correctly and mentions `make sample`.
+- [x] 2.2 Add `seed` to `src/landcover/tracking.py` and make `register` return the version, as in design Decision 9. Add the test to `tests/test_training_and_tracking.py`. Verify `make test` passes, and that the test shows an existing alias trains nothing, a missing alias trains `rule` then `rf` and promotes the second version, and another registry error is raised.
 
 ## 3. Manifests
 

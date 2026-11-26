@@ -83,6 +83,8 @@ On a fresh stack, seed its empty S3 bucket once. The bootstrap downloads the pin
 make data
 ```
 
+`make data` runs `make sample`, which fetches the files that are missing and fails unless `data/raw` hashes to `data/raw.dvc`, and then pushes to the store. `make sample` alone needs no store; [Lab 4: cluster](#lab-4-cluster) uses it.
+
 From a clean clone pointing at the populated store, copy its credentials into `.env` and run the following command to retrieve and verify the same files through DVC.
 
 ```sh

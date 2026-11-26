@@ -161,7 +161,7 @@ Alternative: build on Docker Desktop and run `minikube image load`. That exports
 
 ### 8. Retrieval index
 
-The Job `retrieval-index-COMMIT` runs `python -m landcover.retrieval index` in `landcover-llm:COMMIT` with `WAREHOUSE_DSN` from the Secret, `backoffLimit: 1` and no TTL. The image is offline (`HF_HUB_OFFLINE=1`) and carries the documents and settings whose version the LLM readiness check expects, so the index equals the image by construction.
+The Job `retrieval-index-COMMIT` runs `python -m landcover.retrieval index` in `landcover-llm:COMMIT` with `WAREHOUSE_DSN` from the Secret, the default `backoffLimit` (6) and no TTL. The image is offline (`HF_HUB_OFFLINE=1`) and carries the documents and settings whose version the LLM readiness check expects, so the index equals the image by construction.
 
 Applying the manifest at the same commit leaves the completed Job unchanged and nothing runs. A new commit creates a new Job, which replaces the schema in one transaction.
 
@@ -190,8 +190,8 @@ Alternative: chain `make train`, `make register RUN=…` and `make champion` in 
 2. `minikube start --driver=docker --container-runtime=docker --kubernetes-version=v1.30.0 --memory=$MINIKUBE_MEMORY --cpus=$MINIKUBE_CPUS`. On a running profile this returns in seconds.
 3. `eval "$(minikube docker-env)"`; `make images`; build the MLflow image.
 4. `make sample`.
-5. Create the Secret and `postgres-init`, then apply the substituted manifest.
-6. `rollout status` for `postgres` and `mlflow`.
+5. Create the Secret and `postgres-init`. Apply only the PostgreSQL objects of the substituted manifest (`kubectl apply -l app=postgres`) and wait for `rollout status`, so MLflow and the index Job never start before the first `initdb` has created their databases.
+6. Apply the whole manifest and wait for `rollout status` of `mlflow`.
 7. Port-forward `svc/mlflow` to `127.0.0.1:5002`, wait for `/health`, then run `MLFLOW_TRACKING_URI=http://127.0.0.1:5002 uv run --locked python -m landcover.tracking seed`.
 8. `kubectl wait --for=condition=complete job/retrieval-index-<commit> --timeout=10m`.
 9. `rollout status deploy/ml --timeout=5m`. Port-forward `svc/ml` to 8000. Run `uv run --locked python scripts/smoke.py predict --ml http://127.0.0.1:8000 --mlflow http://127.0.0.1:5002 --commit <sha>`.
