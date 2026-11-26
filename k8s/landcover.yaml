@@ -254,3 +254,167 @@ spec:
           resources:
             requests: {memory: 1Gi, cpu: 500m}
             limits: {memory: 1536Mi}
+---
+# Monitoring (openspec add-lab4-monitoring, design Decision 8). scripts/cluster.sh creates the ConfigMaps
+# prometheus (k8s/prometheus.yml), grafana-provisioning and grafana-dashboards (k8s/grafana/).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pushgateway
+  labels: {app: pushgateway}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: pushgateway}}
+  template:
+    metadata: {labels: {app: pushgateway}}
+    spec:
+      containers:
+        - name: pushgateway
+          image: prom/pushgateway:v1.11.4
+          ports: [{containerPort: 9091}]
+          readinessProbe:
+            httpGet: {path: /-/ready, port: 9091}
+            periodSeconds: 10
+          resources:
+            requests: {memory: 32Mi, cpu: 50m}
+            limits: {memory: 64Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pushgateway
+  labels: {app: pushgateway}
+spec:
+  selector: {app: pushgateway}
+  ports: [{port: 9091}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  labels: {app: prometheus}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: prometheus}}
+  template:
+    metadata: {labels: {app: prometheus}}
+    spec:
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v3.13.5
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            - --storage.tsdb.retention.time=2d
+          ports: [{containerPort: 9090}]
+          readinessProbe:
+            httpGet: {path: /-/ready, port: 9090}
+            periodSeconds: 10
+          resources:
+            requests: {memory: 256Mi, cpu: 100m}
+            limits: {memory: 512Mi}
+          volumeMounts:
+            - {name: config, mountPath: /etc/prometheus, readOnly: true}
+            # ponytail: emptyDir, the series are lost with the pod; add a PVC if history must survive restarts.
+            - {name: data, mountPath: /prometheus}
+      volumes:
+        - name: config
+          configMap: {name: prometheus}
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  labels: {app: prometheus}
+spec:
+  selector: {app: prometheus}
+  ports: [{port: 9090}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  labels: {app: grafana}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: grafana}}
+  template:
+    metadata: {labels: {app: grafana}}
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:13.3.2
+          env:
+            # Reached only through a port-forward on 127.0.0.1, like MLflow; viewers need no login.
+            - {name: GF_AUTH_ANONYMOUS_ENABLED, value: "true"}
+            - {name: GF_AUTH_ANONYMOUS_ORG_ROLE, value: Viewer}
+            - {name: GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH, value: /var/lib/grafana/dashboards/landcover.json}
+            - {name: GF_ANALYTICS_REPORTING_ENABLED, value: "false"}
+            - {name: GF_ANALYTICS_CHECK_FOR_UPDATES, value: "false"}
+          ports: [{containerPort: 3000}]
+          readinessProbe:
+            httpGet: {path: /api/health, port: 3000}
+            periodSeconds: 10
+          # Grafana 13 was OOM-killed at start with a 256 Mi limit.
+          resources:
+            requests: {memory: 256Mi, cpu: 100m}
+            limits: {memory: 512Mi}
+          volumeMounts:
+            - {name: provisioning, mountPath: /etc/grafana/provisioning/datasources/datasource.yml,
+               subPath: datasource.yml, readOnly: true}
+            - {name: provisioning, mountPath: /etc/grafana/provisioning/dashboards/dashboards.yml,
+               subPath: dashboards.yml, readOnly: true}
+            - {name: dashboards, mountPath: /var/lib/grafana/dashboards, readOnly: true}
+      volumes:
+        - name: provisioning
+          configMap: {name: grafana-provisioning}
+        - name: dashboards
+          configMap: {name: grafana-dashboards}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  labels: {app: grafana}
+spec:
+  selector: {app: grafana}
+  ports: [{port: 3000}]
+---
+# The drift report: every 5 minutes, the window of the 5 minutes before (python -m landcover.monitor report).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: drift-report
+  labels: {app: drift-report}
+spec:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  # A run more than 2 minutes late is skipped rather than reported against the wrong window.
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: report
+              image: landcover-monitor:COMMIT
+              imagePullPolicy: IfNotPresent
+              envFrom: [{configMapRef: {name: landcover}}]
+              env:
+                - {name: PUSHGATEWAY_URL, value: "http://pushgateway:9091"}
+                - {name: WINDOW_MINUTES, value: "5"}
+                - {name: MIN_OBSERVATIONS, value: "50"}
+                # Provisional: no-shift p95 0.45 (design 6.6); justified in add-lab4-drift-alert.
+                - {name: DRIFT_THRESHOLD, value: "0.5"}
+                - name: WAREHOUSE_DSN
+                  valueFrom: {secretKeyRef: {name: landcover, key: WAREHOUSE_DSN}}
+              resources:
+                requests: {memory: 512Mi, cpu: 100m}
+                limits: {memory: 1Gi}

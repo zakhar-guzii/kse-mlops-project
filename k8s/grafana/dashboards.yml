@@ -1,0 +1,8 @@
+# The course dashboard is a file in Git (k8s/grafana/landcover.json); edits in the browser cannot be saved over it.
+apiVersion: 1
+providers:
+  - name: landcover
+    type: file
+    allowUiUpdates: false
+    disableDeletion: true
+    options: {path: /var/lib/grafana/dashboards}

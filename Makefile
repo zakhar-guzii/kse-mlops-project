@@ -1,4 +1,4 @@
-.PHONY: setup lint test up down airflow-password sample data pull-data train import register champion reproduce train-remote retrieval-index retrieval-eval llm-server answer-eval images cluster
+.PHONY: setup lint test up down airflow-password sample data pull-data train import register champion reproduce train-remote retrieval-index retrieval-eval llm-server answer-eval images cluster replay reference
 
 # Credentials for DVC and Compose come from the untracked .env (see .env.example).
 -include .env
@@ -118,12 +118,12 @@ llm-server: $(LLAMA_SERVER) $(LLM_FILE)
 answer-eval:
 	uv run --locked $(if $(TOP_K),--group rag) python -m landcover.answer eval $(if $(TOP_K),--top-k $(TOP_K))
 
-# Lab 4: build both service images from the committed tree, tagged with the full commit SHA.
+# Lab 4: build the two service images and the drift job image from the committed tree, tagged with the full commit SHA.
 # The context is `git archive HEAD`, so uncommitted and ignored files never enter an image;
 # a tree with uncommitted changes to tracked files is refused so no edit is expected in it.
 images:
 	@git diff --quiet HEAD || { echo "uncommitted changes to tracked files; commit them first" >&2; exit 1; }
-	for target in ml llm; do \
+	for target in ml llm monitor; do \
 		git archive HEAD | docker build --target $$target --build-arg GIT_COMMIT=$$(git rev-parse HEAD) \
 			-t landcover-$$target:$$(git rev-parse HEAD) -f docker/serve/Dockerfile - || exit 1; \
 	done
@@ -136,3 +136,15 @@ MINIKUBE_CPUS ?= 4
 
 cluster:
 	scripts/cluster.sh
+
+# Lab 4 monitoring, through the port-forwards make cluster opens: ml on 8000, mlflow on 5002, postgres on 5433.
+# replay sends the 128 held-out quadrants within one 5-minute window; reference builds the champion's drift
+# reference after a promotion and a restart (nothing when it exists).
+ML_URL ?= http://127.0.0.1:8000
+
+replay:
+	uv run --locked python -m landcover.monitor replay --ml $(ML_URL)
+
+reference:
+	uv run --locked python -m landcover.monitor reference --ml $(ML_URL) --mlflow http://127.0.0.1:5002 \
+		--dsn postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@127.0.0.1:5433/landcover

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# make cluster (openspec add-lab4-cluster, design Decision 10): Minikube, the images of HEAD, the manifests, a seeded
-# registry and a smoke request, from a clean clone. Every step is a no-op when its result is already in place.
+# make cluster (openspec add-lab4-cluster, design Decision 10; add-lab4-monitoring, Decision 10): Minikube, the images
+# of HEAD, the manifests with the monitoring stack, a seeded registry, a smoke request, the drift reference and the
+# labels, from a clean clone. Every step is a no-op when its result is already in place.
 # Run through make, which exports .env, PYTHONPATH and MINIKUBE_MEMORY / MINIKUBE_CPUS.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -15,13 +16,17 @@ step() { echo "== $* (at ${SECONDS} s)"; }
 
 # minikube kubectl runs kubectl as a child, so stop the children of each background job too.
 trap 'for p in $(jobs -p); do pkill -P "$p"; kill "$p"; done 2>/dev/null || true' EXIT
-forward() {  # service, local port, service port
+forward() {  # service, local port, service port; waits for an HTTP answer (a TCP connection for PostgreSQL)
     local log
     log=$(mktemp)
     # Not through k(): a function runs in a subshell, and kubectl would outlive the trap as a grandchild.
     minikube kubectl -- port-forward "svc/$1" "$2:$3" --address 127.0.0.1 >"$log" 2>&1 &
     for _ in $(seq 60); do
-        curl -s -o /dev/null "http://127.0.0.1:$2/" && return
+        if [ "$1" = postgres ]; then
+            (exec 3<>"/dev/tcp/127.0.0.1/$2") 2>/dev/null && return
+        else
+            curl -s -o /dev/null "http://127.0.0.1:$2/" && return
+        fi
         sleep 1
     done
     echo "port-forward to $1 did not open:" >&2
@@ -48,6 +53,10 @@ k create secret generic landcover --dry-run=client -o yaml \
     --from-literal=WAREHOUSE_DSN="postgresql://$POSTGRES_USER:$POSTGRES_PASSWORD@postgres/landcover" \
     | k apply -f -
 k create configmap postgres-init --from-file=sql/warehouse.sql --dry-run=client -o yaml | k apply -f -
+k create configmap prometheus --from-file=k8s/prometheus.yml --dry-run=client -o yaml | k apply -f -
+k create configmap grafana-provisioning --from-file=k8s/grafana/datasource.yml \
+    --from-file=k8s/grafana/dashboards.yml --dry-run=client -o yaml | k apply -f -
+k create configmap grafana-dashboards --from-file=k8s/grafana/landcover.json --dry-run=client -o yaml | k apply -f -
 manifest=$(sed "s/COMMIT/$commit/g" k8s/landcover.yaml)
 # PostgreSQL first: MLflow and the index Job need its databases from the first start on.
 echo "$manifest" | k apply -l app=postgres -f -
@@ -69,6 +78,16 @@ forward ml 8000 8000
 uv run --locked python scripts/smoke.py predict --ml http://127.0.0.1:8000 --mlflow http://127.0.0.1:5002 \
     --commit "$commit"
 
+step "drift reference and labels"
+forward postgres 5433 5432
+dsn="postgresql://$POSTGRES_USER:$POSTGRES_PASSWORD@127.0.0.1:5433/landcover"
+uv run --locked python -m landcover.monitor reference --ml http://127.0.0.1:8000 --mlflow http://127.0.0.1:5002 \
+    --dsn "$dsn"
+uv run --locked python -m landcover.monitor labels --dsn "$dsn"
+
+step "monitoring"
+for deploy in pushgateway prometheus grafana; do k rollout status "deploy/$deploy" --timeout=10m; done
+
 step "LLM service"
 if curl -sf -o /dev/null http://127.0.0.1:8081/v1/models; then
     k rollout status deploy/llm --timeout=3m
@@ -78,5 +97,7 @@ else
     echo "llm not ready: no text model server on 127.0.0.1:8081 (make llm-server)"
 fi
 
+echo "dashboard: minikube kubectl -- port-forward svc/grafana 3000:3000, then http://127.0.0.1:3000/d/landcover"
+echo "metrics:   minikube kubectl -- port-forward svc/prometheus 9090:9090, then http://127.0.0.1:9090"
 k get pods,svc
 echo "took ${SECONDS} s"

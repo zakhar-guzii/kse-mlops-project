@@ -34,3 +34,11 @@ CREATE TABLE IF NOT EXISTS serving.predictions (
 );
 
 CREATE INDEX IF NOT EXISTS predictions_received_at ON serving.predictions (received_at);
+
+-- Lab 4 monitoring: crosswalked reference masks of the development quadrants, keyed by the replay's source ID
+-- (replay/<batch>/<tile>/q<n>). The mask is a numpy .npy of the 256x256 uint8 label.
+CREATE TABLE IF NOT EXISTS serving.labels (
+    source_id  text PRIMARY KEY,
+    mask       bytea NOT NULL,
+    arrived_at timestamptz NOT NULL DEFAULT now()
+);

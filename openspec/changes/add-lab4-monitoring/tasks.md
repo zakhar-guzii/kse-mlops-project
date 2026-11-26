@@ -17,7 +17,7 @@ These belong to `add-lab4-drift-alert`. Also out of scope:
 
 ## 1. Dependencies and image
 
-- [ ] 1.1 Add the group `monitor` (`evidently==0.7.23`, `pandas==2.3.3`, with the reason in a comment) to `pyproject.toml` and run `uv lock`. Verify:
+- [x] 1.1 Add the group `monitor` (`evidently==0.7.23`, `pandas==2.3.3`, with the reason in a comment) to `pyproject.toml` and run `uv lock`. Verify:
   - `uv.lock` has pandas 2.3.3 and no other version change beyond Evidently's new dependencies (`git diff uv.lock`);
   - `make setup`, `make lint` and `make test` pass;
   - `uv run --locked --group monitor python -c "import evidently, pandas; print(evidently.__version__, pandas.__version__)"` prints `0.7.23 2.3.3`;
@@ -30,21 +30,21 @@ These belong to `add-lab4-drift-alert`. Also out of scope:
 
 ## 2. Monitor module
 
-- [ ] 2.1 Add `src/landcover/monitor.py` with `window()`, `quadrants()`, `label_quadrants()`, the source-ID helpers and the `replay` command (design Decisions 1–3), and `tests/test_monitor.py` with the window and quadrant tests of Decision 11. Verify `make test` passes. Against the cluster's ML port-forward, verify `python -m landcover.monitor replay --ml http://127.0.0.1:8000` waits for the boundary, prints 128 `ok`, and that `SELECT count(*), min(received_at), max(received_at) FROM serving.predictions WHERE source_id LIKE 'replay/%'` shows 128 rows inside one 5-minute window.
-- [ ] 2.2 Add the report core: version selection, the insufficient-data rule, the Evidently call on the ten columns and the parser of `DataDriftPreset`'s result (design Decision 6). Add the tests of Decision 11 that need Evidently, with `pytest.importorskip`. Verify:
+- [x] 2.1 Add `src/landcover/monitor.py` with `window()`, `quadrants()`, `label_quadrants()`, the source-ID helpers and the `replay` command (design Decisions 1–3), and `tests/test_monitor.py` with the window and quadrant tests of Decision 11. Verify `make test` passes. Against the cluster's ML port-forward, verify `python -m landcover.monitor replay --ml http://127.0.0.1:8000` waits for the boundary, prints 128 `ok`, and that `SELECT count(*), min(received_at), max(received_at) FROM serving.predictions WHERE source_id LIKE 'replay/%'` shows 128 rows inside one 5-minute window.
+- [x] 2.2 Add the report core: version selection, the insufficient-data rule, the Evidently call on the ten columns and the parser of `DataDriftPreset`'s result (design Decision 6). Add the tests of Decision 11 that need Evidently, with `pytest.importorskip`. Verify:
   - `uv run --locked --group monitor pytest -q tests/test_monitor.py` passes, including identical frames giving 0 and a two-standard-deviation brightness shift crossing 0.5;
   - `make test` passes with those tests skipped.
-- [ ] 2.3 Add quality (design Decision 6, step 4) and the metrics registry with `push_to_gateway` (Decision 7), with the tests of Decision 11 for `models.scores` equality, `incomplete_labels`, the series set and an absent version. Verify:
+- [x] 2.3 Add quality (design Decision 6, step 4) and the metrics registry with `push_to_gateway` (Decision 7), with the tests of Decision 11 for `models.scores` equality, `incomplete_labels`, the series set and an absent version. Verify:
   - `make test` passes;
   - with `TEST_DSN` set, the version-selection test passes: the window rows count, the reference row is excluded, and an empty window falls back to the latest version.
-- [ ] 2.4 Add `serving.labels` to `sql/serving.sql` and the `labels` and `reference` commands (design Decisions 4 and 5), with the `TEST_DSN` test that `labels` twice gives one row per fixture quadrant. Verify:
+- [x] 2.4 Add `serving.labels` to `sql/serving.sql` and the `labels` and `reference` commands (design Decisions 4 and 5), with the `TEST_DSN` test that `labels` twice gives one row per fixture quadrant. Verify:
   - `make test` passes, and with `TEST_DSN` the new test passes;
   - against the cluster through port-forwards 8000, 5002 and 5433: `labels` gives 64 rows, none with a `D073-2022` source ID; `reference` gives 256 `reference/…` rows for the champion version; a second `reference` prints that the reference exists and sends nothing (row count unchanged);
   - after `kubectl rollout restart deployment/ml`, `sql/serving.sql` runs without error on a database that already has the table.
 
 ## 3. Monitoring stack
 
-- [ ] 3.1 Add `k8s/prometheus.yml` and the Pushgateway and Prometheus Deployments and Services to `k8s/landcover.yaml` (design Decision 8). Create ConfigMap `prometheus` and apply. Verify:
+- [x] 3.1 Add `k8s/prometheus.yml` and the Pushgateway and Prometheus Deployments and Services to `k8s/landcover.yaml` (design Decision 8). Create ConfigMap `prometheus` and apply. Verify:
   - both pods are ready;
   - with a port-forward on 9090, `curl -s 127.0.0.1:9090/api/v1/targets` shows `ml` and `pushgateway` up, and `llm` up with `make llm-server` running or down without it;
   - `landcover_requests_total` returns series from the query API.
@@ -53,7 +53,7 @@ These belong to `add-lab4-drift-alert`. Also out of scope:
   - `curl -s` of the Pushgateway's `/metrics` shows the series of Decision 7 for the champion version, including `landcover_report_insufficient{reason="few_observations"}` in a window without traffic;
   - after a run with the Pushgateway scaled to 0, the Job is marked failed;
   - the next scheduled run after scaling back up succeeds.
-- [ ] 3.3 Add `k8s/grafana/` (data source, dashboard provider, `landcover.json` with the nine panels of design Decision 8) and the Grafana Deployment and Service. Create the two ConfigMaps and apply. With a port-forward on 3000, verify:
+- [x] 3.3 Add `k8s/grafana/` (data source, dashboard provider, `landcover.json` with the nine panels of design Decision 8) and the Grafana Deployment and Service. Create the two ConfigMaps and apply. With a port-forward on 3000, verify:
   - `http://127.0.0.1:3000/d/landcover` opens without a login;
   - every panel queries without an error, checked by opening each panel's query inspector, or by `GET /api/dashboards/uid/landcover` and each target through Prometheus's query API;
   - a panel edit in the browser cannot be saved over the provisioned file.

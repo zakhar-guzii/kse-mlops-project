@@ -1,0 +1,12 @@
+# Lab 4 Prometheus (openspec add-lab4-monitoring, design Decision 8): the two services and the Pushgateway by
+# Service name. honor_labels keeps the job and labels the drift report pushed instead of the gateway's own.
+global:
+  scrape_interval: 15s
+scrape_configs:
+  - job_name: ml
+    static_configs: [{targets: ["ml:8000"]}]
+  - job_name: llm
+    static_configs: [{targets: ["llm:8000"]}]
+  - job_name: pushgateway
+    honor_labels: true
+    static_configs: [{targets: ["pushgateway:9091"]}]
