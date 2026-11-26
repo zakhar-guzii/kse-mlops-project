@@ -1,0 +1,144 @@
+# promtool tests of k8s/alerts.yml (openspec add-lab4-drift-alert, design Decision 6), run with the Prometheus image:
+#   docker run --rm -v "$PWD/k8s:/k8s" --entrypoint promtool prom/prometheus:v3.13.5 test rules /k8s/alerts_test.yml
+rule_files: [alerts.yml]
+evaluation_interval: 15s  # as in k8s/prometheus.yml
+
+tests:
+  # Brightness 0.32 for 5 minutes, then 0.62 for 5 minutes, then the series ends; a share column stays at 0.53.
+  - interval: 1m
+    input_series:
+      - series: 'landcover_drift_distance{job="landcover-drift",column="brightness",model_version="3"}'
+        values: '0.32x4 0.62x4 stale'
+      - series: 'landcover_drift_distance{job="landcover-drift",column="share_bareland",model_version="3"}'
+        values: '0.53x15'
+      - series: 'landcover_drift_threshold{job="landcover-drift"}'
+        values: '0.5x15'
+      - series: 'landcover_report_window_end_seconds{job="landcover-drift"}'
+        values: '1795694400x15'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: BrightnessDrift
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: BrightnessDrift
+        exp_alerts:
+          - exp_labels: {severity: email, job: landcover-drift, column: brightness, model_version: "3"}
+            exp_annotations:
+              summary: Brightness drift on model version 3
+              description: >-
+                Brightness distance 0.620 is at or above the threshold
+                0.5 in the report window
+                ending 2026-11-26 12:00:00 +0000 UTC.
+      - eval_time: 12m
+        alertname: BrightnessDrift
+        exp_alerts: []
+
+  # The job pushes every 5 minutes; the latest request was served at time 0.
+  - interval: 5m
+    input_series:
+      - series: 'landcover_latest_request_seconds{job="landcover-drift"}'
+        values: '0x15'
+      - series: 'push_time_seconds{job="landcover-drift"}'
+        values: '0+300x15'
+    alert_rule_test:
+      - eval_time: 1h
+        alertname: DataStale
+        exp_alerts: []
+      - eval_time: 1h0m15s
+        alertname: DataStale
+        exp_alerts:
+          - exp_labels: {severity: email, job: landcover-drift}
+            exp_annotations:
+              summary: No request served for an hour
+              description: The latest served request is 1h 0m 15s old.
+      - eval_time: 1h0m15s
+        alertname: DriftReportStale
+        exp_alerts: []
+
+  # The last push at minute 10; the Pushgateway keeps the group, so push_time_seconds stays.
+  - interval: 1m
+    input_series:
+      - series: 'push_time_seconds{job="landcover-drift"}'
+        values: '0+60x10 600x30'
+    alert_rule_test:
+      - eval_time: 24m
+        alertname: DriftReportStale
+        exp_alerts: []
+      - eval_time: 27m
+        alertname: DriftReportStale
+        exp_alerts:
+          - exp_labels: {severity: email, job: landcover-drift}
+            exp_annotations:
+              summary: No drift report pushed for 15 minutes
+              description: Seconds since the last push, or 1 when the report group is absent - 1020.
+
+  # No report group at all.
+  - interval: 1m
+    input_series: []
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: DriftReportStale
+        exp_alerts: []
+      - eval_time: 11m
+        alertname: DriftReportStale
+        exp_alerts:
+          - exp_labels: {severity: email, job: landcover-drift}
+            exp_annotations:
+              summary: No drift report pushed for 15 minutes
+              description: Seconds since the last push, or 1 when the report group is absent - 1.
+
+  # The ML Service has no ready pod from minute 6.
+  - interval: 1m
+    input_series:
+      - series: 'up{job="ml",instance="ml:8000"}'
+        values: '1x5 0x10'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: MLServiceUnavailable
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: MLServiceUnavailable
+        exp_alerts:
+          - exp_labels: {severity: email, job: ml, instance: "ml:8000"}
+            exp_annotations:
+              summary: The ML service has had no ready pod for 5 minutes
+              description: The scrape of the ml Service has failed for 5 minutes, for example because the model is missing.
+
+  # Invalid uploads every minute; errors from a new series at minutes 10, 11 and 13.
+  - interval: 1m
+    input_series:
+      - series: 'landcover_requests_total{job="ml",endpoint="/predict",outcome="invalid",model_version="3"}'
+        values: '1+1x30'
+      - series: 'landcover_requests_total{job="ml",endpoint="/predict",outcome="error",model_version="3"}'
+        values: '_x10 1 2 2 3x17'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: PredictErrors
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: PredictErrors
+        exp_alerts: []
+      - eval_time: 14m
+        alertname: PredictErrors
+        exp_alerts:
+          - exp_labels: {severity: email}
+            exp_annotations:
+              summary: Prediction errors
+              description: /predict answered with an error 3 times in the last hour.
+
+  # One error more than an hour ago, then three more at minutes 61-63.
+  - interval: 1m
+    input_series:
+      - series: 'landcover_requests_total{job="ml",endpoint="/predict",outcome="error",model_version="3"}'
+        values: '1x60 2 3 4x5'
+    alert_rule_test:
+      - eval_time: 62m
+        alertname: PredictErrors
+        exp_alerts: []
+      - eval_time: 63m
+        alertname: PredictErrors
+        exp_alerts:
+          - exp_labels: {severity: email}
+            exp_annotations:
+              summary: Prediction errors
+              description: /predict answered with an error 3 times in the last hour.

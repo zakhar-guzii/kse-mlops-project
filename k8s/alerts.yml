@@ -1,0 +1,60 @@
+# Lab 4 alert rules (openspec add-lab4-drift-alert, design Decision 2), loaded by Prometheus from the ConfigMap
+# prometheus and checked by k8s/alerts_test.yml (README, Lab 4: drift alert). Every alert goes by email to the
+# operator's mailbox (k8s/alertmanager.yml); none of them changes the served model.
+groups:
+  - name: landcover
+    rules:
+      # The threshold is the one the report publishes (DRIFT_THRESHOLD in k8s/landcover.yaml), not a copy.
+      # The series lives as long as the Pushgateway holds that window's report, so the alert resolves by itself.
+      - alert: BrightnessDrift
+        expr: >-
+          landcover_drift_distance{job="landcover-drift",column="brightness"}
+          >= on(job) group_left landcover_drift_threshold{job="landcover-drift"}
+        labels: {severity: email}
+        annotations:
+          summary: Brightness drift on model version {{ $labels.model_version }}
+          description: >-
+            Brightness distance {{ printf "%.3f" $value }} is at or above the threshold
+            {{ with query "landcover_drift_threshold" }}{{ . | first | value }}{{ end }} in the report window
+            ending {{ with query "landcover_report_window_end_seconds" }}{{ . | first | value | humanizeTimestamp }}{{ end }}.
+      # Data age while the job runs; a stopped job is DriftReportStale.
+      - alert: DataStale
+        expr: time() - landcover_latest_request_seconds{job="landcover-drift"} > 3600
+        labels: {severity: email}
+        annotations:
+          summary: No request served for an hour
+          description: The latest served request is {{ $value | humanizeDuration }} old.
+      # A healthy job pushes every 5 minutes, so the lag passes 300 s only for seconds per cycle;
+      # for 10m makes it "no push for 15 minutes" (or "no report group for 10 minutes").
+      - alert: DriftReportStale
+        expr: >-
+          time() - push_time_seconds{job="landcover-drift"} > 300
+          or absent(push_time_seconds{job="landcover-drift"})
+        for: 10m
+        labels: {severity: email}
+        annotations:
+          summary: No drift report pushed for 15 minutes
+          description: Seconds since the last push, or 1 when the report group is absent - {{ $value }}.
+      # The Service lists only ready pods, so a pod without its model shows as a failed scrape.
+      - alert: MLServiceUnavailable
+        expr: up{job="ml"} == 0
+        for: 5m
+        labels: {severity: email}
+        annotations:
+          summary: The ML service has had no ready pod for 5 minutes
+          description: The scrape of the ml Service has failed for 5 minutes, for example because the model is missing.
+      # Errors in the last hour: the current count minus the count an hour ago (0 for a series that is newer, so
+      # its first error counts; increase() would miss it). invalid and unavailable are not errors.
+      # ponytail: a restart of the same model version within the hour undercounts; use increase() with created
+      # timestamps if the service ever exposes them.
+      - alert: PredictErrors
+        expr: >-
+          sum(
+            landcover_requests_total{job="ml",endpoint="/predict",outcome="error"}
+            - (landcover_requests_total{job="ml",endpoint="/predict",outcome="error"} offset 1h
+               or landcover_requests_total{job="ml",endpoint="/predict",outcome="error"} * 0)
+          ) >= 3
+        labels: {severity: email}
+        annotations:
+          summary: Prediction errors
+          description: /predict answered with an error {{ $value }} times in the last hour.

@@ -1,0 +1,160 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="792" viewBox="0 0 1000 792" role="img" aria-labelledby="title desc">
+  <title id="title">Lab 4 Minikube topology</title>
+  <desc id="desc">On the host, make drift-demo, make replay and the smoke and bench scripts call the ml Service with /predict and the llm Service with /ask through port-forwards. make images builds landcover-ml, landcover-llm and landcover-monitor in Minikube's Docker daemon, tagged with the commit. In the cluster, ml loads the model by the alias champion from mlflow and logs every request to serving.predictions in postgres; llm retrieves passages from the index in postgres, which the retrieval-index Job builds once per commit, and calls llama-server on the host over HTTP. The ConfigMap and Secret landcover carry the alias, the URLs and the PostgreSQL credentials. The drift-report CronJob compares the last 5-minute window with the reference every 5 minutes and pushes the result to pushgateway. prometheus scrapes ml, llm and pushgateway, evaluates k8s/alerts.yml and sends alerts to alertmanager, which emails them to mailpit. grafana shows the dashboard. The operator reads the mailbox and the dashboard through port-forwards and promotes or rolls back by hand.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#334155"/></marker>
+  </defs>
+  <style>
+    text { font: 15px Helvetica, Arial, sans-serif; fill: #26354a; }
+    .name { font-size: 17px; font-weight: bold; fill: #162e53; }
+    g rect { fill: #eef4ff; stroke: #335582; stroke-width: 1.5; }
+    .flow { fill: none; stroke: #334155; stroke-width: 2; marker-end: url(#arrow); }
+    .label { fill: #244b75; }
+    .cluster { fill: none; stroke: #64748b; stroke-width: 1.5; stroke-dasharray: 8 5; }
+    .zone { font-weight: bold; fill: #475569; }
+  </style>
+  <rect width="1000" height="792" fill="white"/>
+  <rect class="cluster" x="10" y="118" width="980" height="542" rx="10"/>
+  <text class="zone" x="976" y="648" text-anchor="end">Minikube cluster: 6 GiB, 4 CPUs</text>
+
+  <g transform="translate(24 16)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">Host client</text>
+    <text x="14" y="47">make drift-demo, make replay</text>
+    <text x="14" y="67">scripts/smoke.py, bench.py</text>
+  </g>
+
+  <g transform="translate(371 16)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">Minikube Docker daemon</text>
+    <text x="14" y="47">make images: landcover-ml,</text>
+    <text x="14" y="67">-llm, -monitor, tag = commit</text>
+  </g>
+
+  <g transform="translate(718 16)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">llama-server on the host</text>
+    <text x="14" y="47">Gemma 4 12B, 127.0.0.1:8081</text>
+    <text x="14" y="67">make llm-server</text>
+  </g>
+
+  <g transform="translate(24 150)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">ml</text>
+    <text x="14" y="47">Deployment + Service :8000</text>
+    <text x="14" y="67">ready only with the model</text>
+  </g>
+
+  <g transform="translate(371 150)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">mlflow</text>
+    <text x="14" y="47">registry landcover-segmenter,</text>
+    <text x="14" y="67">alias champion</text>
+  </g>
+
+  <g transform="translate(718 150)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">llm</text>
+    <text x="14" y="47">Deployment + Service :8000</text>
+    <text x="14" y="67">retriever and prompt in image</text>
+  </g>
+
+  <g transform="translate(24 284)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">landcover</text>
+    <text x="14" y="47">ConfigMap: alias, URLs</text>
+    <text x="14" y="67">Secret: PostgreSQL login</text>
+  </g>
+
+  <g transform="translate(371 284)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">postgres</text>
+    <text x="14" y="47">serving.predictions (log),</text>
+    <text x="14" y="67">retrieval index, MLflow data</text>
+  </g>
+
+  <g transform="translate(718 284)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">retrieval-index-&lt;commit&gt;</text>
+    <text x="14" y="47">Job, once per commit</text>
+  </g>
+
+  <g transform="translate(24 418)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">drift-report</text>
+    <text x="14" y="47">CronJob every 5 min,</text>
+    <text x="14" y="67">Evidently, Wasserstein</text>
+  </g>
+
+  <g transform="translate(371 418)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">pushgateway</text>
+    <text x="14" y="47">holds the last report,</text>
+    <text x="14" y="67">job="landcover-drift"</text>
+  </g>
+
+  <g transform="translate(718 418)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">prometheus</text>
+    <text x="14" y="47">scrapes ml, llm, pushgateway;</text>
+    <text x="14" y="67">rules k8s/alerts.yml</text>
+  </g>
+
+  <g transform="translate(24 552)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">mailpit</text>
+    <text x="14" y="47">operator@landcover.local</text>
+    <text x="14" y="67">SMTP 1025, mailbox 8025</text>
+  </g>
+
+  <g transform="translate(371 552)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">alertmanager</text>
+    <text x="14" y="47">one route: operator-email</text>
+  </g>
+
+  <g transform="translate(718 552)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">grafana</text>
+    <text x="14" y="47">dashboard landcover.json</text>
+  </g>
+
+  <g transform="translate(24 696)">
+    <rect width="258" height="80" rx="7"/>
+    <text class="name" x="14" y="24">Operator</text>
+    <text x="14" y="47">reads mail and dashboard;</text>
+    <text x="14" y="67">promotes or rolls back</text>
+  </g>
+
+  <path class="flow" d="M100 97 V147"/>
+  <text class="label" x="108" y="138">/predict</text>
+  <path class="flow" d="M200 97 V134 H900 V147"/>
+  <text class="label" x="782" y="128">/ask</text>
+  <path class="flow" d="M500 97 V122"/>
+  <text class="label" x="508" y="114">tag = commit</text>
+  <path class="flow" d="M940 149 V100"/>
+  <text class="label" x="948" y="140">HTTP</text>
+  <path class="flow" d="M368 190 H285"/>
+  <text class="label" x="326" y="182" text-anchor="middle">alias</text>
+  <path class="flow" d="M153 231 V258 H440 V281"/>
+  <text class="label" x="161" y="252">request log</text>
+  <path class="flow" d="M500 231 V281"/>
+  <path class="flow" d="M847 231 V258 H560 V281"/>
+  <text class="label" x="855" y="252">retrieve</text>
+  <path class="flow" d="M715 324 H633"/>
+  <path class="flow" d="M440 365 V392 H153 V415"/>
+  <text class="label" x="161" y="386">window and reference</text>
+  <path class="flow" d="M283 458 H368"/>
+  <text class="label" x="326" y="450" text-anchor="middle">push</text>
+  <path class="flow" d="M631 458 H715"/>
+  <text class="label" x="673" y="450" text-anchor="middle">scrape</text>
+  <path class="flow" d="M780 499 V526 H500 V549"/>
+  <text class="label" x="508" y="543">alerts</text>
+  <path class="flow" d="M900 499 V549"/>
+  <path class="flow" d="M368 592 H285"/>
+  <text class="label" x="326" y="584" text-anchor="middle">email</text>
+  <path class="flow" d="M153 633 V693"/>
+  <path class="flow" d="M847 633 V736 H285"/>
+  <text class="label" x="560" y="728" text-anchor="middle">dashboard, port-forward 3000</text>
+  <text class="label" x="161" y="676">port-forward 8025</text>
+</svg>

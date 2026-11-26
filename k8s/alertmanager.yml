@@ -1,0 +1,13 @@
+# Lab 4 Alertmanager (openspec add-lab4-drift-alert, design Decision 3): one route, every alert emailed to the
+# operator's mailbox in Mailpit inside the cluster. No credentials: Mailpit accepts plain SMTP without auth.
+# Timings and send_resolved keep their defaults: 30 s group_wait, 4 h repeat, no resolved email.
+route:
+  receiver: operator-email
+  group_by: [alertname, model_version]
+receivers:
+  - name: operator-email
+    email_configs:
+      - to: operator@landcover.local
+        from: alertmanager@landcover.local
+        smarthost: mailpit:1025
+        require_tls: false

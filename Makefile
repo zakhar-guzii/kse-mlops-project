@@ -1,4 +1,4 @@
-.PHONY: setup lint test up down airflow-password sample data pull-data train import register champion reproduce train-remote retrieval-index retrieval-eval llm-server answer-eval images cluster replay reference
+.PHONY: setup lint test up down airflow-password sample data pull-data train import register champion reproduce train-remote retrieval-index retrieval-eval llm-server answer-eval images cluster replay reference drift-demo
 
 # Credentials for DVC and Compose come from the untracked .env (see .env.example).
 -include .env
@@ -144,6 +144,12 @@ ML_URL ?= http://127.0.0.1:8000
 
 replay:
 	uv run --locked python -m landcover.monitor replay --ml $(ML_URL)
+
+# Lab 4 drift alert: the unchanged replay in one window, then 64 of the 128 quadrants darkened by 0.5 (seed 0) in the
+# next; the second report crosses the threshold and the BrightnessDrift email reaches mailpit (README, Lab 4: drift alert).
+drift-demo:
+	uv run --locked python -m landcover.monitor replay --ml $(ML_URL)
+	uv run --locked python -m landcover.monitor replay --ml $(ML_URL) --darken 0.5 --fraction 0.5 --seed 0
 
 reference:
 	uv run --locked python -m landcover.monitor reference --ml $(ML_URL) --mlflow http://127.0.0.1:5002 \

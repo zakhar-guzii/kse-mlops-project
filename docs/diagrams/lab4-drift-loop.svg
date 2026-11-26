@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="514" viewBox="0 0 1000 514" role="img" aria-labelledby="title desc">
+  <title id="title">Lab 4 drift-to-action loop</title>
+  <desc id="desc">make drift-demo darkens 64 of the 128 held-out quadrants by 0.5 with seed 0 and sends them to /predict of the ml service with shift/ source IDs. The service logs every request to serving.predictions. Every 5 minutes the drift-report CronJob compares the last window with the champion's reference, which make reference built from the training quadrants, and pushes the brightness distance and the threshold to pushgateway. The prometheus rule BrightnessDrift fires when the distance reaches the threshold, alertmanager routes the alert and mailpit receives the email for the operator. The operator checks the dashboard and decides; a promotion or rollback is the operator's own command, and the ml service then loads the model by the alias champion. No alert trains, promotes or rolls back by itself.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#334155"/></marker>
+  </defs>
+  <style>
+    text { font: 15px Helvetica, Arial, sans-serif; fill: #26354a; }
+    .name { font-size: 17px; font-weight: bold; fill: #162e53; }
+    g rect { fill: #eef4ff; stroke: #335582; stroke-width: 1.5; }
+    .flow { fill: none; stroke: #334155; stroke-width: 2; marker-end: url(#arrow); }
+    .manual { fill: none; stroke: #92400e; stroke-width: 2; stroke-dasharray: 7 5; marker-end: url(#arrow); }
+    .label { fill: #244b75; }
+    .gate { fill: #92400e; font-weight: bold; }
+  </style>
+  <rect width="1000" height="514" fill="white"/>
+  <g transform="translate(24 16)">
+    <rect width="220" height="80" rx="7"/>
+    <text class="name" x="14" y="24">Shifted replay</text>
+    <text x="14" y="47">make drift-demo: 64 of 128</text>
+    <text x="14" y="67">darkened ×0.5, seed 0</text>
+  </g>
+
+  <g transform="translate(268 16)">
+    <rect width="220" height="80" rx="7"/>
+    <text class="name" x="14" y="24">ml</text>
+    <text x="14" y="47">/predict logs every</text>
+    <text x="14" y="67">request</text>
+  </g>
+
+  <g transform="translate(512 16)">
+    <rect width="220" height="80" rx="7"/>
+    <text class="name" x="14" y="24">Current window</text>
+    <text x="14" y="47">serving.predictions,</text>
+    <text x="14" y="67">last 5 minutes</text>
+  </g>
+
+  <g transform="translate(756 16)">
+    <rect width="220" height="80" rx="7"/>
+    <text class="name" x="14" y="24">drift-report</text>
+    <text x="14" y="47">CronJob every 5 min,</text>
+    <text x="14" y="67">Evidently, Wasserstein</text>
+  </g>
+
+  <g transform="translate(512 150)">
+    <rect width="220" height="80" rx="7"/>
+    <text class="name" x="14" y="24">Reference window</text>
+    <text x="14" y="47">make reference: 256 training</text>
+    <text x="14" y="67">quadrants, data version</text>
+  </g>
+
+  <g transform="translate(756 284)">
+    <rect width="220" height="80" rx="7"/>
+    <text class="name" x="14" y="24">pushgateway</text>
+    <text x="14" y="47">brightness distance,</text>
+    <text x="14" y="67">threshold 0.5</text>
+  </g>
+
+  <g transform="translate(512 284)">
+    <rect width="220" height="80" rx="7"/>
+    <text class="name" x="14" y="24">prometheus</text>
+    <text x="14" y="47">rule BrightnessDrift:</text>
+    <text x="14" y="67">distance ≥ threshold</text>
+  </g>
+
+  <g transform="translate(268 284)">
+    <rect width="220" height="80" rx="7"/>
+    <text class="name" x="14" y="24">alertmanager</text>
+    <text x="14" y="47">routes the alert to</text>
+    <text x="14" y="67">operator-email</text>
+  </g>
+
+  <g transform="translate(24 284)">
+    <rect width="220" height="80" rx="7"/>
+    <text class="name" x="14" y="24">mailpit</text>
+    <text x="14" y="47">operator@landcover.local</text>
+  </g>
+
+  <g transform="translate(24 418)">
+    <rect width="220" height="80" rx="7"/>
+    <text class="name" x="14" y="24">Operator</text>
+    <text x="14" y="47">first ten minutes (§5.5):</text>
+    <text x="14" y="67">dashboard, then decide</text>
+  </g>
+
+  <g transform="translate(268 418)">
+    <rect width="220" height="80" rx="7"/>
+    <text class="name" x="14" y="24">Promote or roll back</text>
+    <text x="14" y="47">make champion VERSION=n,</text>
+    <text x="14" y="67">rollout restart deploy/ml</text>
+  </g>
+
+  <path class="flow" d="M245 56 H265"/>
+  <path class="flow" d="M489 56 H509"/>
+  <path class="flow" d="M733 56 H753"/>
+  <path class="flow" d="M733 190 H820 V99"/>
+  <text class="label" x="828" y="160">reference</text>
+  <path class="flow" d="M920 97 V281"/>
+  <text class="label" x="928" y="262">push</text>
+  <path class="flow" d="M755 324 H735"/>
+  <path class="flow" d="M511 324 H491"/>
+  <path class="flow" d="M267 324 H247"/>
+  <path class="flow" d="M134 365 V415"/>
+  <path class="manual" d="M245 458 H265"/>
+  <path class="manual" d="M489 458 H500 V124 H400 V99"/>
+  <text class="label" x="408" y="118">load by alias</text>
+  <text class="gate" x="512" y="458">By hand only: no alert trains,</text>
+  <text class="gate" x="512" y="478">promotes or rolls back</text>
+</svg>

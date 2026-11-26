@@ -1,13 +1,14 @@
 """Lab 4 drift reports: the served window against the training reference (docs/design.md 6.6).
 
-    python -m landcover.monitor replay --ml http://127.0.0.1:8000
+    python -m landcover.monitor replay --ml http://127.0.0.1:8000 [--darken 0.5 --fraction 0.5 --seed 0]
     python -m landcover.monitor reference --ml URL --mlflow URL --dsn DSN
     python -m landcover.monitor labels --dsn DSN
     python -m landcover.monitor report      # the CronJob; configuration from the environment
 
 The observation unit is a 256x256 quadrant sent to /predict, so the ML service computes the features of both
 sides. A request's source ID (header X-Source-Id) marks what it is: `reference/<data version>/<batch>/<tile>/q<n>`
-for the training reference, `replay/<batch>/<tile>/q<n>` for held-out traffic, which is also the label key.
+for the training reference, `replay/<batch>/<tile>/q<n>` for held-out traffic, which is also the label key, and
+`shift/<batch>/<tile>/q<n>` for a held-out quadrant the replay darkened (openspec add-lab4-drift-alert, Decision 1).
 """
 
 import argparse
@@ -75,6 +76,23 @@ def quadrants(path):
                 yield q, memfile.read()
 
 
+def darken(body, factor):
+    """The quadrant GeoTIFF with bands 1-3 multiplied by `factor`; band 4, which holds validity, is unchanged."""
+    with MemoryFile(body) as source, source.open() as src:
+        data = src.read()
+        data[:3] = np.clip(np.rint(data[:3] * factor), 0, 255)
+        with MemoryFile() as memfile:
+            with memfile.open(**src.profile) as dst:
+                dst.write(data)
+                dst.colorinterp = src.colorinterp
+            return memfile.read()
+
+
+def shifted(n, fraction, seed):
+    """The indices of the quadrants to darken: the same seed picks the same ones."""
+    return set(np.random.default_rng(seed).permutation(n)[:round(fraction * n)].tolist())
+
+
 def label_quadrants(path):
     """(q, crosswalked uint8 mask) per quadrant of a label raster."""
     with rasterio.open(path) as src:
@@ -127,14 +145,23 @@ def send(ml, items):
     return responses, containing(first), containing(last)
 
 
-def replay(ml, batches=HELD_OUT, prefix="replay", wait=True):
+def replay_items(batches=HELD_OUT, prefix="replay", factor=None, fraction=0.5, seed=0):
+    """(source ID, bytes) in batch, tile and quadrant order; with `factor`, a seeded fraction darkened as shift/."""
+    quads = [(batch, path.stem, q, body) for batch in batches for path in tiles(batch) for q, body in quadrants(path)]
+    chosen = shifted(len(quads), fraction, seed) if factor is not None else set()
+    if chosen:
+        print(f"darkened {len(chosen)} of {len(quads)} by {factor} (fraction {fraction}, seed {seed})", flush=True)
+    return [(source_id("shift", batch, tile, q), darken(body, factor)) if i in chosen
+            else (source_id(prefix, batch, tile, q), body) for i, (batch, tile, q, body) in enumerate(quads)]
+
+
+def replay(ml, batches=HELD_OUT, prefix="replay", wait=True, factor=None, fraction=0.5, seed=0):
+    items = replay_items(batches, prefix, factor, fraction, seed)
     if wait:
         now = datetime.now(UTC)
         start = window(now)[1] + timedelta(minutes=WINDOW_MINUTES)
         print(f"waiting for the window that starts at {start:%H:%M} UTC", flush=True)
         time.sleep((start - now).total_seconds() + 5)
-    items = ((source_id(prefix, batch, path.stem, q), body)
-             for batch in batches for path in tiles(batch) for q, body in quadrants(path))
     responses, first, last = send(ml, items)
     print(f"{len(responses)} ok, window {first[0]:%H:%M}-{first[1]:%H:%M} UTC, "
           f"version {sorted({r['model_version'] for r in responses})}")
@@ -329,6 +356,9 @@ def main(argv=None):
     p = sub.add_parser("replay", help="send the held-out quadrants to /predict within one window")
     p.add_argument("--ml", required=True)
     p.add_argument("--no-wait", action="store_true", help="start at once instead of at the next window")
+    p.add_argument("--darken", type=float, metavar="FACTOR", help="multiply bands 1-3 of a fraction of quadrants")
+    p.add_argument("--fraction", type=float, default=0.5, help="share of quadrants to darken (default 0.5)")
+    p.add_argument("--seed", type=int, default=0, help="seed of the darkened quadrants' choice (default 0)")
     p = sub.add_parser("reference", help="send the training quadrants the champion's reference lacks")
     p.add_argument("--ml", required=True)
     p.add_argument("--mlflow", required=True)
@@ -338,7 +368,7 @@ def main(argv=None):
     sub.add_parser("report", help="compare the last window with the reference and push the result")
     args = parser.parse_args(argv)
     if args.command == "replay":
-        replay(args.ml, wait=not args.no_wait)
+        replay(args.ml, wait=not args.no_wait, factor=args.darken, fraction=args.fraction, seed=args.seed)
     elif args.command == "reference":
         reference(args.ml, args.mlflow, args.dsn)
     elif args.command == "labels":

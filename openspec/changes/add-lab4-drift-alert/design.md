@@ -91,7 +91,7 @@ Alternatives:
 | `DataStale` | `time() - landcover_latest_request_seconds{job="landcover-drift"} > 3600` | 0s |
 | `DriftReportStale` | `time() - push_time_seconds{job="landcover-drift"} > 300 or absent(push_time_seconds{job="landcover-drift"})` | 10m |
 | `MLServiceUnavailable` | `up{job="ml"} == 0` | 5m |
-| `PredictErrors` | `sum(increase(landcover_requests_total{job="ml",endpoint="/predict",outcome="error"}[1h])) >= 3` | 0s |
+| `PredictErrors` | `sum(c - (c offset 1h or c * 0)) >= 3`, where `c` is `landcover_requests_total{job="ml",endpoint="/predict",outcome="error"}` | 0s |
 
 - **`BrightnessDrift` holds no state.** Its series lives exactly as long as the Pushgateway holds that window's report. The next PUT either brings a new value or none, and Prometheus marks the old series stale, so the alert resolves on its own. `for: 0s`, because a report holds one value for its 5 minutes. An `insufficient_data` version publishes no distance and cannot fire it.
 - **Annotations.**
@@ -102,7 +102,7 @@ Alternatives:
 - **`DataStale`** is not combined with job freshness: `DriftReportStale` covers a stopped job. With the job running and nothing served, only `DataStale` fires, as the spec scenario requires.
 - **`DriftReportStale`.** A healthy job pushes every 5 minutes, so the lag exceeds 300 s only for seconds per cycle. `for: 10m` turns that into "no push for 15 minutes", and a missing group into "absent for 10 minutes". A Pushgateway restart empties the group for at most one cycle, below the 10 minutes.
 - **`MLServiceUnavailable` on `up`.** The Service hides an unready pod, so a scrape of `landcover_model_loaded` cannot see 0 (Context). During `rollout restart` the old pod serves until the new one is ready, so `up` stays 1.
-- **`PredictErrors`** counts `error` only. `invalid` and `unavailable` are the client's input and the loading state.
+- **`PredictErrors`** counts `error` only. `invalid` and `unavailable` are the client's input and the loading state. The service creates the `error` series at its first error with the value 1 and exposes no created timestamp, so `increase()` would miss that first error and fire on the fourth. The current count minus the count an hour ago, or 0 for a newer series, counts it. A restart of the same model version within the hour undercounts; a promotion changes `model_version` and starts a new series.
 
 Alternatives:
 - **A threshold literal in the rule.** Rejected: two copies of 0.5 (spec "One threshold value").

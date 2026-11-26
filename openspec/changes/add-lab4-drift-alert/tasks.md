@@ -42,7 +42,7 @@ Out of scope:
 
 ## 3. Shifted replay and the demonstration
 
-- [ ] 3.1 Add the darkening, the seeded selection and the `shift/` source IDs to `replay`, plus the CLI options (design Decision 1). Add the tests of Decision 6 to `tests/test_monitor.py`. Verify:
+- [x] 3.1 Add the darkening, the seeded selection and the `shift/` source IDs to `replay`, plus the CLI options (design Decision 1). Add the tests of Decision 6 to `tests/test_monitor.py`. Verify:
   - `make test` and `make lint` pass;
   - on a fixture quadrant, the darkened bands 1–3 equal `rint(0.5 × original)` and `read_masks` is unchanged;
   - seed 0 picks the same 64 indices twice.

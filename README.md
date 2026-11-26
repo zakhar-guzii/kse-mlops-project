@@ -1021,7 +1021,7 @@ The observation unit is a 256×256 quadrant of a sample tile, sent to `/predict`
 
 Every 5 minutes the job takes the window of the previous 5 minutes. For each model version served in it, and the version of the latest served request, it compares the `ok` rows that are not reference rows with that version's reference rows:
 
-- **Drift.** Evidently's `DataDriftPreset` with normed Wasserstein distance (in reference standard deviations) on ten columns: the red, green and blue means, brightness, and the shares of the six classes the labels can score (`developed` and `road` have zero variance in the reference). A column with distance ≥ `DRIFT_THRESHOLD` counts as drifted. The threshold is 0.5 for now: the 95th percentile of the worst column between two halves of the training tiles was 0.45. The value for alerting is chosen in the next part of Lab 4.
+- **Drift.** Evidently's `DataDriftPreset` with normed Wasserstein distance (in reference standard deviations) on ten columns: the red, green and blue means, brightness, and the shares of the six classes the labels can score (`developed` and `road` have zero variance in the reference). A column with distance ≥ `DRIFT_THRESHOLD` counts as drifted. The threshold is 0.5: the 95th percentile of the worst column between two halves of the training tiles was 0.45. The alert compares the brightness column alone with it ([Lab 4: drift alert](#lab-4-drift-alert)).
 - **Quality.** Mean IoU of the six scored classes over the window's rows that have a label, computed as in Lab 2.
 - **Insufficient data.** Fewer than 50 observations on either side, or no reference, gives `insufficient_data` with the reason (`few_observations`, `no_reference`, `incomplete_labels`) instead of a value.
 - **Freshness.** The receive time of the latest served request, next to the Pushgateway's `push_time_seconds`: a job that keeps running while nothing is served shows a growing data age.
@@ -1116,3 +1116,55 @@ Measured on the same cluster after a 1024×1024 `/predict` and a report on a ful
 
 Grafana 13 was killed for exceeding a first limit of 256 MiB at start-up; at 768 MiB the kernel reclaims its file cache at the limit and it has not been killed.
 
+## Lab 4: drift alert
+
+Prometheus evaluates five alert rules, [k8s/alerts.yml](k8s/alerts.yml), every 15 s and sends firing alerts to Alertmanager ([k8s/alertmanager.yml](k8s/alertmanager.yml)). Alertmanager has one route: it emails every alert to `operator@landcover.local`, a mailbox in Mailpit inside the cluster. The path needs no secret and no external account. An alert never trains, promotes, rolls back or restarts anything; those stay the operator's commands. The design is in Section 6.6 of the [design document](docs/design.md).
+
+### Rules
+
+| Alert | Fires when | `for` | Why |
+|---|---|---|---|
+| `BrightnessDrift` | the report's brightness distance for a model version ≥ the threshold it publishes (`landcover_drift_threshold`, `DRIFT_THRESHOLD` = 0.5 in the CronJob) | 0 s | Lab step 5: a shift in the served images |
+| `DataStale` | the latest served request is more than 1 h old while the job keeps pushing | 0 s | the data, not only the job, can stop |
+| `DriftReportStale` | no report pushed for 15 minutes, or no report group for 10 minutes | 10 min | the Pushgateway keeps a group without a TTL |
+| `MLServiceUnavailable` | the `ml` Service has no ready pod, for example because the model is missing | 5 min | service health (Section 6.6) |
+| `PredictErrors` | `/predict` answered with `error` 3 or more times in the last hour; `invalid` does not count | 0 s | a ready service can still fail on images |
+
+The alert watches brightness only. The class-share columns of the U-Net already reach 0.53 on unchanged held-out traffic ([Two windows](#two-windows)), and brightness does not depend on the model. A report holds one value for its window; the next report brings a new one or none, so the alert resolves by itself. A version with `insufficient_data` has no distance and cannot fire it.
+
+`DataStale` fires on any cluster that has served nothing for an hour, for example after a bring-up without a replay, and its email repeats every 4 hours. The course system has no steady traffic, so this is expected.
+
+### Channel
+
+| Object | Image | Job |
+|---|---|---|
+| Deployment and Service `alertmanager` | `prom/alertmanager:v0.34.2` | one route and one email receiver; groups by alert name and model version, waits 30 s, repeats a firing alert every 4 h, sends no resolved email |
+| Deployment and Service `mailpit` | `axllent/mailpit:v1.33.1` | SMTP on 1025, mailbox web UI and API on 8025; no database, so a pod restart empties it |
+
+`make cluster` deploys both, puts `alerts.yml` next to `prometheus.yml` in the ConfigMap `prometheus` and creates the ConfigMap `alertmanager`. A hash of each configuration is a pod annotation, so a changed file rolls only its pod and an unchanged one leaves the mailbox alone.
+
+```sh
+kubectl port-forward svc/mailpit 8025:8025 &        # http://127.0.0.1:8025
+curl -s 127.0.0.1:8025/api/v1/messages              # the received emails as JSON
+kubectl port-forward svc/alertmanager 9093:9093 &   # http://127.0.0.1:9093
+curl -s 127.0.0.1:9090/api/v1/alerts                # active alerts, with the Prometheus port-forward
+```
+
+### The operator's first ten minutes
+
+After a `BrightnessDrift` email (design Section 5.5):
+
+1. Open the report window the email names on the dashboard; note the column, the distance and the threshold.
+2. Check the window's source mix in the request log: `SELECT split_part(source_id, '/', 1), count(*) FROM serving.predictions WHERE received_at >= <window start> AND received_at < <window end> GROUP BY 1`.
+3. Check `insufficient_data` and the data age, so that a thin or stale window is not read as drift.
+4. Keep the model serving: the alert changed nothing, and `champion` stays where it is.
+5. Record the decision: no action with the reason, a fault to investigate, or a request for labelled controls or a labelled batch from the affected source. Promotion and rollback stay `make champion VERSION=<n>` and `kubectl rollout restart deployment/ml`.
+
+### Checking the rules
+
+The rules are tested against synthetic series in [k8s/alerts_test.yml](k8s/alerts_test.yml): the drift alert fires at 0.62 and not at 0.32 nor on a share column at 0.53, and resolves when the series ends; `DataStale` fires at 1 h of data age while the job pushes; `DriftReportStale` fires after 15 minutes without a push; `PredictErrors` counts a new series' first error and ignores `invalid`. Both checks use the images' own tools and need nothing else on the host:
+
+```sh
+docker run --rm -v "$PWD/k8s:/k8s" --entrypoint promtool prom/prometheus:v3.13.5 test rules /k8s/alerts_test.yml
+docker run --rm -v "$PWD/k8s:/k8s" --entrypoint amtool prom/alertmanager:v0.34.2 check-config /k8s/alertmanager.yml
+```

@@ -94,6 +94,32 @@ def test_source_ids():
     assert monitor.source_id("reference", "D080-2017", "B", 0, "abc") == "reference/abc/D080-2017/B/q0"
 
 
+def test_darkening_scales_the_colour_bands_and_keeps_validity(tmp_path):
+    write_tile(tmp_path / "t.tif")
+    _, body = list(monitor.quadrants(tmp_path / "t.tif"))[1]
+    with MemoryFile(body) as a, a.open() as before, MemoryFile(monitor.darken(body, 0.5)) as b, b.open() as after:
+        original, dark = before.read(), after.read()
+        assert (dark[:3] == np.rint(0.5 * original[:3].astype(float))).all()
+        assert (dark[3] == original[3]).all() and dark[0].max() == 25
+        assert (after.read_masks() == before.read_masks()).all() and after.colorinterp == before.colorinterp
+
+
+def test_the_same_seed_darkens_the_same_quadrants():
+    chosen = monitor.shifted(128, 0.5, 0)
+    assert len(chosen) == 64 and chosen == monitor.shifted(128, 0.5, 0) != monitor.shifted(128, 0.5, 1)
+
+
+def test_darkened_quadrants_carry_shift_ids(tmp_path, monkeypatch):
+    (tmp_path / "images").mkdir()
+    write_tile(tmp_path / "images" / "AA-1.tif")
+    monkeypatch.setattr(monitor, "batch_dir", lambda batch: tmp_path)
+    plain = monitor.replay_items(["D017-2021"])
+    items = monitor.replay_items(["D017-2021"], factor=0.5, fraction=0.5, seed=0)
+    chosen = monitor.shifted(4, 0.5, 0)
+    assert [s for s, _ in items] == [("shift" if q in chosen else "replay") + f"/D017-2021/AA-1/q{q}" for q in range(4)]
+    assert [body == original for (_, body), (_, original) in zip(items, plain)] == [q not in chosen for q in range(4)]
+
+
 def test_columns_are_the_inputs_and_the_scored_class_shares():
     assert monitor.COLUMNS == ["mean_r", "mean_g", "mean_b", "brightness", "share_bareland", "share_rangeland",
                                "share_tree", "share_water", "share_agriculture", "share_building"]

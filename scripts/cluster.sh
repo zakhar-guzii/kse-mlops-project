@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# make cluster (openspec add-lab4-cluster, design Decision 10; add-lab4-monitoring, Decision 10): Minikube, the images
-# of HEAD, the manifests with the monitoring stack, a seeded registry, a smoke request, the drift reference and the
-# labels, from a clean clone. Every step is a no-op when its result is already in place.
+# make cluster (openspec add-lab4-cluster, design Decision 10; add-lab4-monitoring, Decision 10; add-lab4-drift-alert,
+# Decisions 4 and 5): Minikube, the images of HEAD, the manifests with the monitoring and alerting stack, a seeded
+# registry, a smoke request, the drift reference and the labels, from a clean clone. Every step is a no-op when its result is already in place.
 # Run through make, which exports .env, PYTHONPATH and MINIKUBE_MEMORY / MINIKUBE_CPUS.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -53,11 +53,18 @@ k create secret generic landcover --dry-run=client -o yaml \
     --from-literal=WAREHOUSE_DSN="postgresql://$POSTGRES_USER:$POSTGRES_PASSWORD@postgres/landcover" \
     | k apply -f -
 k create configmap postgres-init --from-file=sql/warehouse.sql --dry-run=client -o yaml | k apply -f -
-k create configmap prometheus --from-file=k8s/prometheus.yml --dry-run=client -o yaml | k apply -f -
+k create configmap prometheus --from-file=k8s/prometheus.yml --from-file=k8s/alerts.yml --dry-run=client -o yaml \
+    | k apply -f -
+k create configmap alertmanager --from-file=k8s/alertmanager.yml --dry-run=client -o yaml | k apply -f -
 k create configmap grafana-provisioning --from-file=k8s/grafana/datasource.yml \
     --from-file=k8s/grafana/dashboards.yml --dry-run=client -o yaml | k apply -f -
 k create configmap grafana-dashboards --from-file=k8s/grafana/landcover.json --dry-run=client -o yaml | k apply -f -
-manifest=$(sed "s/COMMIT/$commit/g" k8s/landcover.yaml)
+# Prometheus and Alertmanager do not reload a changed ConfigMap: a hash of their files in the pod template rolls them
+# when a file changes and leaves them, with the mailbox, alone when nothing did.
+prometheus_config=$(cat k8s/prometheus.yml k8s/alerts.yml | shasum -a 256 | cut -c1-16)
+alertmanager_config=$(shasum -a 256 <k8s/alertmanager.yml | cut -c1-16)
+manifest=$(sed -e "s/COMMIT/$commit/g" -e "s/PROMETHEUS_CONFIG/$prometheus_config/" \
+    -e "s/ALERTMANAGER_CONFIG/$alertmanager_config/" k8s/landcover.yaml)
 # PostgreSQL first: MLflow and the index Job need its databases from the first start on.
 echo "$manifest" | k apply -l app=postgres -f -
 k rollout status deploy/postgres --timeout=5m
@@ -85,8 +92,8 @@ uv run --locked python -m landcover.monitor reference --ml http://127.0.0.1:8000
     --dsn "$dsn"
 uv run --locked python -m landcover.monitor labels --dsn "$dsn"
 
-step "monitoring"
-for deploy in pushgateway prometheus grafana; do k rollout status "deploy/$deploy" --timeout=10m; done
+step "monitoring and alerting"
+for deploy in pushgateway prometheus grafana alertmanager mailpit; do k rollout status "deploy/$deploy" --timeout=10m; done
 
 step "LLM service"
 if curl -sf -o /dev/null http://127.0.0.1:8081/v1/models; then
@@ -99,5 +106,6 @@ fi
 
 echo "dashboard: minikube kubectl -- port-forward svc/grafana 3000:3000, then http://127.0.0.1:3000/d/landcover"
 echo "metrics:   minikube kubectl -- port-forward svc/prometheus 9090:9090, then http://127.0.0.1:9090"
+echo "mailbox:   minikube kubectl -- port-forward svc/mailpit 8025:8025, then http://127.0.0.1:8025"
 k get pods,svc
 echo "took ${SECONDS} s"

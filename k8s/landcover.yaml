@@ -298,7 +298,10 @@ spec:
   strategy: {type: Recreate}
   selector: {matchLabels: {app: prometheus}}
   template:
-    metadata: {labels: {app: prometheus}}
+    metadata:
+      labels: {app: prometheus}
+      # A hash of k8s/prometheus.yml and k8s/alerts.yml (scripts/cluster.sh): a changed file rolls the pod.
+      annotations: {landcover/config: PROMETHEUS_CONFIG}
     spec:
       containers:
         - name: prometheus
@@ -419,3 +422,87 @@ spec:
               resources:
                 requests: {memory: 256Mi, cpu: 100m}
                 limits: {memory: 512Mi}
+---
+# Alerting (openspec add-lab4-drift-alert, design Decision 3). scripts/cluster.sh creates the ConfigMap
+# alertmanager (k8s/alertmanager.yml) and puts k8s/alerts.yml into the ConfigMap prometheus.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+  labels: {app: alertmanager}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: alertmanager}}
+  template:
+    metadata:
+      labels: {app: alertmanager}
+      annotations: {landcover/config: ALERTMANAGER_CONFIG}
+    spec:
+      containers:
+        - name: alertmanager
+          image: prom/alertmanager:v0.34.2
+          args:
+            - --config.file=/etc/alertmanager/alertmanager.yml
+            - --storage.path=/alertmanager
+            # One instance: no gossip peers to wait for before the first notification.
+            - --cluster.listen-address=
+          ports: [{containerPort: 9093}]
+          readinessProbe:
+            httpGet: {path: /-/ready, port: 9093}
+            periodSeconds: 10
+          resources:
+            requests: {memory: 32Mi, cpu: 50m}
+            limits: {memory: 64Mi}
+          volumeMounts:
+            - {name: config, mountPath: /etc/alertmanager, readOnly: true}
+            - {name: data, mountPath: /alertmanager}
+      volumes:
+        - name: config
+          configMap: {name: alertmanager}
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager
+  labels: {app: alertmanager}
+spec:
+  selector: {app: alertmanager}
+  ports: [{port: 9093}]
+---
+# The operator's mailbox: SMTP on 1025, web UI and API on 8025. No database, so a restart empties it.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mailpit
+  labels: {app: mailpit}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: mailpit}}
+  template:
+    metadata: {labels: {app: mailpit}}
+    spec:
+      containers:
+        - name: mailpit
+          image: axllent/mailpit:v1.33.1
+          ports: [{containerPort: 1025}, {containerPort: 8025}]
+          readinessProbe:
+            httpGet: {path: /readyz, port: 8025}
+            periodSeconds: 10
+          resources:
+            requests: {memory: 32Mi, cpu: 50m}
+            limits: {memory: 128Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mailpit
+  labels: {app: mailpit}
+spec:
+  selector: {app: mailpit}
+  ports:
+    - {name: smtp, port: 1025}
+    - {name: http, port: 8025}
