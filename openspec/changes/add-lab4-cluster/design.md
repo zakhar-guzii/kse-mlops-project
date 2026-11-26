@@ -160,7 +160,7 @@ Alternative: build on Docker Desktop and run `minikube image load`. That exports
 
 ### 8. Retrieval index
 
-The Job `retrieval-index-COMMIT` runs `python -m landcover.retrieval index` in `landcover-llm:COMMIT` with `WAREHOUSE_DSN` from the Secret, the default `backoffLimit` (6) and no TTL. The image is offline (`HF_HUB_OFFLINE=1`) and carries the documents and settings whose version the LLM readiness check expects, so the index equals the image by construction.
+The Job `retrieval-index-COMMIT` runs `python -m landcover.retrieval index` in `landcover-llm:COMMIT` with `WAREHOUSE_DSN` from the Secret, `OMP_NUM_THREADS=4` (the image pins one thread for serving, and the embedding took 124 s with it), the default `backoffLimit` (6) and no TTL. The image is offline (`HF_HUB_OFFLINE=1`) and carries the documents and settings whose version the LLM readiness check expects, so the index equals the image by construction.
 
 Applying the manifest at the same commit leaves the completed Job unchanged and nothing runs. A new commit creates a new Job, which replaces the schema in one transaction.
 

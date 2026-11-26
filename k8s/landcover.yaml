@@ -247,6 +247,8 @@ spec:
           imagePullPolicy: IfNotPresent
           command: [python, -m, landcover.retrieval, index]
           env:
+            # The image pins one thread for serving; one-off embedding of ~575 chunks took 124 s with it.
+            - {name: OMP_NUM_THREADS, value: "4"}
             - name: WAREHOUSE_DSN
               valueFrom: {secretKeyRef: {name: landcover, key: WAREHOUSE_DSN}}
           resources:
