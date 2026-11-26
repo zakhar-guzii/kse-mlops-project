@@ -18,7 +18,8 @@ trap 'for p in $(jobs -p); do pkill -P "$p"; kill "$p"; done 2>/dev/null || true
 forward() {  # service, local port, service port
     local log
     log=$(mktemp)
-    k port-forward "svc/$1" "$2:$3" --address 127.0.0.1 >"$log" 2>&1 &
+    # Not through k(): a function runs in a subshell, and kubectl would outlive the trap as a grandchild.
+    minikube kubectl -- port-forward "svc/$1" "$2:$3" --address 127.0.0.1 >"$log" 2>&1 &
     for _ in $(seq 60); do
         curl -s -o /dev/null "http://127.0.0.1:$2/" && return
         sleep 1
