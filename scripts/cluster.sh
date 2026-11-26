@@ -16,12 +16,15 @@ step() { echo "== $* (at ${SECONDS} s)"; }
 # minikube kubectl runs kubectl as a child, so stop the children of each background job too.
 trap 'for p in $(jobs -p); do pkill -P "$p"; kill "$p"; done 2>/dev/null || true' EXIT
 forward() {  # service, local port, service port
-    k port-forward "svc/$1" "$2:$3" --address 127.0.0.1 >/dev/null 2>&1 &
+    local log
+    log=$(mktemp)
+    k port-forward "svc/$1" "$2:$3" --address 127.0.0.1 >"$log" 2>&1 &
     for _ in $(seq 60); do
         curl -s -o /dev/null "http://127.0.0.1:$2/" && return
         sleep 1
     done
-    echo "port-forward to $1 did not open" >&2
+    echo "port-forward to $1 did not open:" >&2
+    cat "$log" >&2
     exit 1
 }
 
