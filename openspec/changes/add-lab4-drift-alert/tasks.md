@@ -53,7 +53,7 @@ Out of scope:
   - the alert is no longer active after the next report;
   - `champion` and the ML service's reported version are unchanged;
   - a second shifted replay with the same seed gives the same distances.
-- [ ] 3.3 Add the evidence to "Lab 4: drift alert" (design Decision 8):
+- [x] 3.3 Add the evidence to "Lab 4: drift alert" (design Decision 8):
   - the shift and the probe table;
   - the `make drift-demo` output;
   - both report lines;
@@ -62,7 +62,7 @@ Out of scope:
   - the timeline with times;
   - the memory of the Alertmanager and Mailpit pods (`memory.peak`), with their limits adjusted if the measurement calls for it.
 
-  Verify that every command in the section runs as written and the images render on GitHub.
+  Verify that every command in the section runs as written and the images render locally in a browser (the branch is not pushed yet).
 
 ## 4. Section 7.3 measurements
 
@@ -76,7 +76,7 @@ Out of scope:
 
 ## 5. Design document
 
-- [ ] 5.1 Draw `docs/diagrams/lab4-cluster.svg` (Appendix 3 Minikube topology with this system's components) and `docs/diagrams/lab4-drift-loop.svg` (Appendix 3 drift-to-action loop: shift, endpoint, request log, CronJob, Pushgateway, Prometheus rule, Alertmanager, Mailpit, operator, and the operator's manual promotion or rollback), in the style of `docs/diagrams/lab3-retrieval.svg` with `<title>` and `<desc>`. Verify both render in a browser and in the GitHub preview, and that every name in them exists in `k8s/landcover.yaml` or the README.
+- [x] 5.1 Draw `docs/diagrams/lab4-cluster.svg` (Appendix 3 Minikube topology with this system's components) and `docs/diagrams/lab4-drift-loop.svg` (Appendix 3 drift-to-action loop: shift, endpoint, request log, CronJob, Pushgateway, Prometheus rule, Alertmanager, Mailpit, operator, and the operator's manual promotion or rollback), in the style of `docs/diagrams/lab3-retrieval.svg` with `<title>` and `<desc>`. Verify both render in a browser, and that every name in them exists in `k8s/landcover.yaml` or the README.
 - [x] 5.2 Revise Sections 5.5, 6.1 (Figure 3 replaced by the topology, the loop added), 6.3, 6.6, 6.7, 6.9, 7.3 and 7.4 as listed in design Decision 8, in `docs/design.md` and the local `docs/design.uk.md`. Verify:
   - Section 6.6 names the metrics, the threshold 0.5 on brightness with its paragraph (consumer, false-alarm rate, cost of a false alarm and of a miss), the schedule, the rules and the mailbox;
   - Appendix 2 questions 4, 7–11, 13, 14, 16 and 20 each have their answer in the section the design table names;
@@ -94,14 +94,15 @@ Out of scope:
 - [x] 6.2 Cold bring-up on a clean clone at the final commit (`cp .env.example .env`, a new Minikube profile, no images). Verify:
   - `make cluster` exits 0, and the duration and the three slowest steps are recorded in the README's bring-up table and the "One command" row;
   - `make drift-demo` on that cluster delivers the drift email.
-- [ ] 6.3 Integration check:
+- [x] 6.3 Integration check:
   - `openspec validate add-lab4-drift-alert --strict` passes;
   - `make lint` and `make test` pass;
   - the `promtool` and `amtool` checks pass;
   - the README's Lab 4 sections and Sections 5.5, 6.1, 6.3, 6.6, 6.7, 6.9, 7.3 and 7.4 agree on the threshold, the rules, the channel, the versions and the measured numbers.
 
-  Then ask the author to approve the `lab-4` tag on that commit, and create it once approved.
 
 ## Workflow follow-up
+
+- The author pushes `lab4`, checks that the README images and the diagrams render on GitHub, and tags the final commit `lab-4`.
 
 - After the whole lab, archive the four Lab 4 changes in order: `add-lab4-services`, `add-lab4-cluster`, `add-lab4-monitoring`, `add-lab4-drift-alert`.
