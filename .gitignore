@@ -19,3 +19,6 @@ runs/
 
 # Lab 3 text model file, fetched by make llm-server.
 models/
+
+# Lab 5 agent traces (make agent); the evidence copies are in docs/traces/.
+/traces/

@@ -1,4 +1,4 @@
-.PHONY: setup lint test up down airflow-password sample data pull-data train import register champion reproduce train-remote retrieval-index retrieval-eval llm-server answer-eval images cluster replay reference drift-demo
+.PHONY: setup lint test up down airflow-password sample data pull-data train import register champion reproduce train-remote retrieval-index retrieval-eval llm-server answer-eval images cluster replay reference drift-demo agent
 
 # Credentials for DVC and Compose come from the untracked .env (see .env.example).
 -include .env
@@ -154,3 +154,9 @@ drift-demo:
 reference:
 	uv run --locked python -m landcover.monitor reference --ml $(ML_URL) --mlflow http://127.0.0.1:5002 \
 		--dsn postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@127.0.0.1:5433/landcover
+
+# Lab 5: answer one task with the agent (src/landcover/agent.py): the text model picks the retriever (postgres on 5433)
+# or /predict at ML_URL, at most 4 tool attempts, and the run writes traces/<time>-<run id>.jsonl. Needs make llm-server
+# and the port-forwards of make cluster. ML_URL=http://127.0.0.1:1 makes every prediction fail (README, Lab 5: agent).
+agent:
+	uv run --locked --group rag python -m landcover.agent "$$TASK" --ml $(ML_URL)

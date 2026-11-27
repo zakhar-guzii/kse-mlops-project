@@ -69,10 +69,10 @@ def fill(template, **values):
     return re.sub(r"\{(\w+)\}", lambda m: values.get(m[1], m[0]), template)
 
 
-def passages(rows):
-    """Retrieved rows as numbered passages in the given order: "[n] doc_id, locator", then the text."""
+def passages(rows, start=1):
+    """Retrieved rows as numbered passages in the given order from `start`: "[n] doc_id, locator", then the text."""
     return "\n\n".join(f"[{n}] {row['doc_id']}, {row['locator']}\n{row['text'].strip()}"
-                       for n, row in enumerate(rows, 1))
+                       for n, row in enumerate(rows, start))
 
 
 def cited(text):

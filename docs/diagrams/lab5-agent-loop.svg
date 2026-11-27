@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="520" viewBox="0 0 1000 520" role="img" aria-labelledby="title desc">
+  <title id="title">Lab 5 agent loop</title>
+  <desc id="desc">make agent passes one task to agent.py on the host. At each step agent.py sends the conversation to llama-server, which serves Gemma 4 12B and returns one JSON step: a reason, an action and its text. The code checks the action against the allowlist retrieve and predict, and the attempt budget of 4 tool attempts. retrieve(query) calls the Lab 3 retriever over the index in the cluster's postgres on port 5433 and returns 10 passages with their document and section; predict(tile_id) posts one of the 16 public tiles of D017-2021 to /predict of the ml service on Minikube and returns the model version, the class shares and the request ID, without the mask. The result goes back into the conversation. The run stops when the model answers, says it cannot or refuses, when the code refuses an action outside the allowlist, or when a tool is named after 4 attempts; it then prints the answer or the stated stop. Every step is written as it ends to traces/time-run id.jsonl with its input, output, tokens, seconds and shadow cost.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#334155"/></marker>
+  </defs>
+  <style>
+    text { font: 15px Helvetica, Arial, sans-serif; fill: #26354a; }
+    .name { font-size: 17px; font-weight: bold; fill: #162e53; }
+    g rect { fill: #eef4ff; stroke: #335582; stroke-width: 1.5; }
+    .agent { fill: #dbe7fb; stroke: #162e53; stroke-width: 2; }
+    .bound { fill: #ffffff; stroke: #335582; stroke-width: 1.2; }
+    .flow { fill: none; stroke: #334155; stroke-width: 2; marker-end: url(#arrow); }
+    .stop { fill: none; stroke: #92400e; stroke-width: 2; marker-end: url(#arrow); }
+    .label { fill: #244b75; font-size: 14px; }
+    .gate { fill: #92400e; font-weight: bold; font-size: 14px; }
+  </style>
+  <rect width="1000" height="520" fill="white"/>
+
+  <g transform="translate(250 16)">
+    <rect width="300" height="80" rx="7"/>
+    <text class="name" x="14" y="24">llama-server (host)</text>
+    <text x="14" y="47">Gemma 4 12B, one JSON step per</text>
+    <text x="14" y="67">call: reason, action, text</text>
+  </g>
+
+  <g transform="translate(24 195)">
+    <rect width="176" height="80" rx="7"/>
+    <text class="name" x="14" y="24">Task</text>
+    <text x="14" y="47">make agent</text>
+    <text x="14" y="67">TASK="…"</text>
+  </g>
+
+  <g transform="translate(250 140)">
+    <rect class="agent" width="300" height="220" rx="7"/>
+    <text class="name" x="14" y="26">agent.py (planner)</text>
+    <rect class="bound" x="14" y="44" width="272" height="44" rx="5"/>
+    <text x="28" y="71">budget = 4 tool attempts</text>
+    <rect class="bound" x="14" y="98" width="272" height="44" rx="5"/>
+    <text x="28" y="125">stop: answer, cannot, refuse</text>
+    <rect class="bound" x="14" y="152" width="272" height="44" rx="5"/>
+    <text x="28" y="179">allowlist: retrieve, predict</text>
+  </g>
+
+  <g transform="translate(646 120)">
+    <rect width="330" height="80" rx="7"/>
+    <text class="name" x="14" y="24">retrieve(query)</text>
+    <text x="14" y="47">Lab 3 retriever, postgres on 5433:</text>
+    <text x="14" y="67">10 passages, document and section</text>
+  </g>
+
+  <g transform="translate(646 250)">
+    <rect width="330" height="80" rx="7"/>
+    <text class="name" x="14" y="24">predict(tile_id)</text>
+    <text x="14" y="47">/predict of ml on Minikube: version,</text>
+    <text x="14" y="67">class shares, request ID; no mask</text>
+  </g>
+
+  <g transform="translate(756 418)">
+    <rect width="220" height="86" rx="7"/>
+    <text class="name" x="14" y="24">Answer or stated stop</text>
+    <text x="14" y="47">answered, unable,</text>
+    <text x="14" y="67">refused, budget_exhausted</text>
+  </g>
+
+  <g transform="translate(250 418)">
+    <rect width="360" height="86" rx="7"/>
+    <text class="name" x="14" y="24">traces/&lt;time&gt;-&lt;run id&gt;.jsonl</text>
+    <text x="14" y="47">every step: input, output, tokens,</text>
+    <text x="14" y="67">seconds, shadow cost; stop reason</text>
+  </g>
+
+  <path class="flow" d="M200 235 H248"/>
+
+  <path class="flow" d="M330 140 V98"/>
+  <text class="label" x="252" y="124">messages</text>
+  <path class="flow" d="M470 98 V138"/>
+  <text class="label" x="478" y="124">step</text>
+
+  <path class="flow" d="M550 150 H644"/>
+  <text class="label" x="580" y="144">call</text>
+  <path class="flow" d="M646 180 H552"/>
+  <text class="label" x="572" y="198">result</text>
+
+  <path class="flow" d="M550 280 H644"/>
+  <text class="label" x="580" y="274">call</text>
+  <path class="flow" d="M646 310 H552"/>
+  <text class="label" x="572" y="328">result</text>
+
+  <path class="flow" d="M300 360 V416"/>
+  <text class="label" x="308" y="394">each step as it ends</text>
+
+  <path class="stop" d="M500 360 V385 H866 V416"/>
+  <text class="gate" x="520" y="378">a stop, a refused action or the spent budget</text>
+</svg>

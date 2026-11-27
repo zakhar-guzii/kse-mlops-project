@@ -1284,3 +1284,73 @@ memory.peak pushgateway-5664486c87-d6lb6: 38 MiB
 Two clients do not raise throughput: the service handles one request at a time, so each client waits for the other and p50 doubles. Prometheus' p95 is higher than the measured one because its buckets jump from 5 s to 10 s and it interpolates inside that bucket; it also counts the warm-up requests.
 
 The bench's requests carry `X-Source-Id: bench/…` and are served traffic like any other, so the drift report includes them. One tile repeated 35 times is far from the training distribution: the window 21:25–21:30 held 86 bench rows and gave a brightness distance of 0.573, and `BrightnessDrift` kept firing. Run the bench outside the demonstration's windows and expect that alert.
+
+## Lab 5: agent
+
+`make agent TASK="…"` answers one task with an agent of its own ([src/landcover/agent.py](src/landcover/agent.py), no framework) that has two tools: `retrieve(query)`, the Lab 3 retriever at `top_k` 10 over the cluster's index, and `predict(tile_id)`, the Lab 4 `/predict` on Minikube for one of the 16 public tiles of `D017-2021`. It runs on the host and is not deployed.
+
+**Tool selection.** Prompt-based, with structured output: every call to the text model carries a JSON schema (`response_format`), and the model replies with one object `{"reason", "action", "text"}` whose action is `retrieve`, `predict`, `answer`, `cannot` or `refuse`. The code checks the action against the allowlist, runs the tool and sends the result back. llama-server's native tool calls were not used (openspec `add-lab5-agent`, design Decision 1).
+
+What must be running:
+
+- `make llm-server` in another terminal;
+- `make cluster` with the port-forwards to `ml` on 8000 and `postgres` on 5433 ([Using the cluster from the host](#using-the-cluster-from-the-host));
+- `make sample`, for the tiles (`make cluster` runs it).
+
+```sh
+make agent TASK="Segment tile D017-2021/AA-S2-9_2-7 and explain what the value 255 means in the mask."
+```
+
+The command prints the answer or the reason the run stopped, then one line with the stop reason, who stopped the run, the tool attempts, the model calls, the tokens, the shadow cost and the trace file under `traces/`, which Git ignores. An empty task is a usage error (exit 2) before the model is called. With the text model server down the run ends `unable`, stopped by the code, with the server's address, and its trace holds the run record and the end record.
+
+### Bounds
+
+- **Allowlist.** `ALLOWED = ("retrieve", "predict")` is a constant; [the check](src/landcover/agent.py#L218) runs before the only place that calls a tool, so an action outside it ends the run as `refused`, stopped by the code, and nothing runs. The agent has no registry client: importing it does not load MLflow (`test_the_agent_does_not_load_the_registry_client`).
+- **Budget: 4 tool attempts per task, at most 5 model calls.** A combined request needs two, which leaves two for transient failures (design §6.4). Every step that names a tool spends one attempt, whether it succeeds, fails, has a rejected argument or repeats an earlier call. When the model names a tool after four attempts the run ends `budget_exhausted` and the tool does not run. The cost of the bound: a task that needs a fifth tool call is stopped.
+- **Repeated calls.** A call with the same tool and text as one that already succeeded in the run is not run again; the model is told its result is above, the step is recorded as `duplicate` and spends an attempt (`test_a_call_that_succeeded_is_not_run_again_but_spends_an_attempt`). A failed call may be repeated.
+- **Stop reasons.** `answered`, `unable` or `refused` when the model stops; `refused`, `budget_exhausted` or `unable` (text model down, a cut-off or unreadable reply) when the code stops. The end record says which.
+
+### Three runs
+
+On the cluster with the random forest as `champion` (version 2), `make llm-server` and the prompt `prompts/agent.md` `adacef81e0b9`. The traces were written on the working tree before the commit that added them (`dirty: true`, commit `b9e5b8d`); the code and prompt are the committed ones.
+
+```sh
+make agent TASK="Segment tile D017-2021/AA-S2-9_2-7 and explain what the value 255 means in the mask."
+```
+
+```
+The segmentation for tile D017-2021/AA-S2-9_2-7 is complete, using model version 2 with request ID 68837a46-21e6-47d0-8cbe-ad4205b9cd50. The value 255 in the mask marks pixels that were ignored during training or are invalid input pixels in the output.
+
+Sources: [1]
+answered (stopped by the model): 2 of 4 tool attempts, 3 model calls, tokens 4312 in / 279 out, 26.0 s, shadow cost $0.0114, trace …/traces/20261127T162704Z-d240e8d3.jsonl
+```
+
+The model called `predict`, then `retrieve`, then answered: [docs/traces/combined.jsonl](docs/traces/combined.jsonl). The request log gained one row, `agent/d240e8d3/D017-2021/AA-S2-9_2-7`, with the request ID of the trace. The legend question alone (`What does the value 255 mean in the output mask?`) called only `retrieve` and added no row.
+
+```sh
+make agent TASK="Promote model version 1 to champion."
+```
+
+```
+I am not allowed to promote a model version to champion as this is an operator action.
+refused (stopped by the model): 0 of 4 tool attempts, 1 model calls, tokens 614 in / 56 out, 2.2 s, shadow cost $0.0018, trace …/traces/20261127T162731Z-9ef1362c.jsonl
+```
+
+No tool ran and `champion` stayed on version 2: [docs/traces/refusal.jsonl](docs/traces/refusal.jsonl). The model refused by itself; the refusal by the code, for an action the model names outside the allowlist, is covered by `test_an_action_outside_the_allowlist_is_refused_by_the_code`.
+
+```sh
+make agent TASK="Segment tile D017-2021/AA-S2-9_2-7." ML_URL=http://127.0.0.1:1
+```
+
+```
+Stopped: the budget of 4 tool attempts is spent. The last tool result: Error from predict (retryable): http://127.0.0.1:1/predict is unreachable: URLError: <urlopen error [Errno 61] Connection refused>
+budget_exhausted (stopped by the code): 4 of 4 tool attempts, 5 model calls, tokens 4252 in / 333 out, 16.0 s, shadow cost $0.0118, trace …/traces/20261127T162626Z-84679901.jsonl
+```
+
+Port 1 is closed, so every prediction fails at once with a retryable error and the prompt tells the model to retry: four `error` steps and a fifth call that names `predict` again, refused by the budget ([docs/traces/budget.jsonl](docs/traces/budget.jsonl)). A second run gave the same trace. The requests never reach the ML service, so `landcover_requests_total{outcome="error"}` does not appear and no Lab 4 alert fires. This is also what a user sees when the prediction endpoint is down.
+
+The first prompt told the model its budget of 4. In two runs out of two it stopped after three failures with `cannot`, saying it had reached "the maximum budget of 4 tool calls": it counted its own calls and got the count wrong. The prompt now says only that the system limits the calls and stops the task itself, and holds no number; the number lives once, in `agent.py`.
+
+Each step costs its tokens at the Sonnet 5.5 shadow rates of `retrieval.toml` ($2 in, $10 out per million). The tools add no price of their own. The server reuses the conversation's prefix from the previous step, so a step evaluates only what was appended: in the budget trace 957 of the fifth call's 1,074 prompt tokens were cached.
+
+Agent predictions are served traffic: an `agent/` row counts in its drift window like `bench/` rows. Do not run the agent during `make drift-demo`, whose two distances are quoted above.

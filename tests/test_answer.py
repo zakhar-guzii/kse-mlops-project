@@ -56,6 +56,11 @@ def test_three_rows_render_as_numbered_passages_in_order():
                                      "[3] qgis-docs, Raster > Styling\nUse a paletted renderer.")
 
 
+def test_passages_can_be_numbered_from_a_later_start():
+    assert answer.passages(ROWS[:2], start=11) == ("[11] oem-paper, 2.2 Data > Classes\nBareland is class 1.\n\n"
+                                                   "[12] export-contract, 5.1 Classes\nBareland is 0.")
+
+
 @pytest.mark.parametrize(("text", "numbers"), [("It is 0.\nSources: [2], [4]", [2, 4]),
                                                ("I do not know.\nSources: none", []),
                                                ("It is 0 [7].\nSources: [7], [3]", [7, 3]),

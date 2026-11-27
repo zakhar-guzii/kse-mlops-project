@@ -7,7 +7,7 @@ See proposal.md for the motivation and the decision tables, and the two specific
 - **Text model server (`make llm-server`).**
   - llama.cpp `b12359` (`b1b770d90`) serves `gemma-4-12b-it-qat-q4_0` on `127.0.0.1:8081` with `--ctx-size 8192 --parallel 1`, so one request has the whole context.
   - A request whose prompt exceeds the context is rejected with `exceed_context_size_error`, not truncated.
-  - The server re-evaluates a prompt that shares only a prefix with the previous one, because of Gemma 4's sliding-window attention, at about 275 tokens per second (Section 6.3). Each step of a run therefore pays for the whole conversation again.
+  - The server re-evaluates a prompt that shares only a prefix with the previous one, because of Gemma 4's sliding-window attention, at about 275 tokens per second (Section 6.3). Measured later in this change: a conversation that only grows is reused (957 of 1,074 prompt tokens cached on the fifth call of the budget trace), so a step evaluates only what was appended.
   - Read in the source, not run: Jinja templates are on by default for the server (`common/common.h`), a Gemma 4 handler parses native tool calls (`common/parsers/gemma4.cpp`), and it is chosen because the template inside the pinned model file contains `'<|tool_call>call:'`. In that handler a `response_format` schema is applied first and tools are then ignored, so the two cannot be combined in one request.
   - No server, cluster or Docker daemon was running when this was written. Nothing here was measured live.
 - **Client (`answer.chat`).**
@@ -79,14 +79,14 @@ repeat at most BUDGET + 1 times:
 ```
 
 - `TOOLS` is one dictionary from the two names to their functions. The membership check is the only way to the single place that calls a tool.
-- `BUDGET = 4` is a module constant with a comment that points to Section 6.4. The prompt receives it through a `{budget}` placeholder, so the number has one copy.
+- `BUDGET = 4` is a module constant with a comment that points to Section 6.4. The prompt does not state it: with the number in the prompt the model counted its own calls wrongly and stopped after three failures in both live runs of task 4.2, so the prompt only says that the system limits the calls and stops the task itself.
 - The last permitted model call must stop the run: it either stops by itself, names an unlisted action, or names a tool with the budget spent. The loop cannot end without a reason.
 - Order matters for the refusal: the allowlist check comes before the budget check, so an operator action is `refused` even on the fifth call.
 - **Why four.** Section 6.4: a combined request uses two attempts and leaves two for transient failures. The cost of the bound is a legitimate task that needs a fifth call and is stopped; the evaluation shows whether any task does.
 
 ### 3. The conversation
 
-- The system message is `prompts/agent.md` after `{budget}` is filled. The first user message is the task.
+- The system message is `prompts/agent.md` as committed. The first user message is the task.
 - After a tool step the conversation gains the model's JSON as an assistant message and the result as a user message: `Result of retrieve:` with the passages, `Result of predict:` with the JSON summary, or `Error from predict (retryable):` with the reason.
 - The call is `answer.chat(llm, None, llm["max_tokens"], messages=…, response_format=…)`. `answer.chat` is not changed.
 - The prompt states:
@@ -206,7 +206,7 @@ One file per run, `traces/<UTC time>-<run id>.jsonl`, the run ID being eight hex
   - the trace has a run record, one step per reply and an end record, every step has a cost, the totals equal the sums, and no record has a key `mask`;
   - HTTP 503 and a refused connection are retryable and HTTP 400 is not, with the HTTP call stubbed;
   - importing `landcover.agent` does not load `mlflow`;
-  - `prompts/agent.md` has its `{budget}` placeholder.
+  - `prompts/agent.md` names every action and holds no budget number.
 - `tests/test_answer.py`: `passages(rows, start=11)` numbers from 11 and the default is unchanged.
 
 ### 11. Design document and README
@@ -231,7 +231,7 @@ One file per run, `traces/<UTC time>-<run id>.jsonl`, the run ID being eight hex
 - **The model gives up before the budget is spent.** After one or two errors it may answer `cannot`, and the trace ends `unable`. → The prompt requires a retry of every retryable error. Task 4.2 checks the result twice. If the model still stops, revise the prompt wording and record the hash that worked.
 - **A misnamed tool is a refusal.** With a free-string action, `search` instead of `retrieve` ends the run. → The prompt lists the five actions; the next change counts such runs and may restrict the field.
 - **Four successful retrievals overflow the context.** → The run ends `unable` with the server's message. Lowering k would trade this rare case against the answers of every task.
-- **Latency.** Every step re-evaluates the conversation: about 10 s per step with one retrieval in it, 30 to 60 s for a combined task. → Accepted for single runs. `--swa-full` is the lever if the evaluation is too slow; it changes the server command recorded in Lab 3, so it belongs to that decision.
+- **Latency.** Measured: a combined task took 26 s, most of it the final call that reads ten passages; the server reuses the conversation's prefix between steps. → Accepted. `--swa-full` stays the lever if the evaluation is too slow; it changes the server command recorded in Lab 3, so it belongs to that decision.
 - **A long answer is cut off.** `reason` plus the message must fit 256 output tokens, or the JSON is invalid and the run ends `unable`. → The prompt limits the answer to three sentences; Lab 3 answers took about 49 tokens.
 - **Agent rows in a drift window.** One to four rows among the 128 of a replay shift its distances slightly. → The README note; the prefix makes the rows visible in the source mix.
 - **Memory.** The agent loads the embedding model next to the text model server and Minikube on the 24 GiB Mac. → The model is 471 MB and loads only when a run retrieves.
