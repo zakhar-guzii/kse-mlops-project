@@ -41,7 +41,7 @@ Group 3 needs the cluster of `make cluster` with its port-forwards to `ml` (8000
 
 ## 3. Live runs
 
-- [ ] 3.1 Refusals before the first task. On a clean tree with the cluster and `make llm-server` up, check each of these four cases. Each must exit non-zero with the cause and add no run to `landcover-agent`:
+- [x] 3.1 Refusals before the first task. On a clean tree with the cluster and `make llm-server` up, check each of these four cases. Each must exit non-zero with the cause and add no run to `landcover-agent`:
   - `make agent-eval` with an untracked file;
   - with `ML_URL=http://127.0.0.1:1` (not ready);
   - with `make llm-server` stopped (ask the author first);

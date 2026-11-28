@@ -132,8 +132,9 @@ def check(task, records):
         else:
             p = predictions[-1]
             version = re.escape(str(p["model_version"]))
+            # "version 2", "version is 2", "Model version: 2": the word, at most 20 characters without a digit, the number
             if task.get("names_prediction") and (p["request_id"] not in message or not re.search(
-                    rf"\bversion\s+{version}\b", message, flags=re.IGNORECASE)):
+                    rf"\bversion\b[^0-9]{{0,20}}{version}\b", message, flags=re.IGNORECASE)):
                 failed.append(f"the answer does not name version {p['model_version']} and request {p['request_id']}")
             top = max(p["class_shares"], key=p["class_shares"].get)
             if task.get("names_top_class") and top.lower() not in message.lower():

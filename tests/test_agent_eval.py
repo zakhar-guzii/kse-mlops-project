@@ -142,8 +142,11 @@ def test_the_cited_passage_must_hold_the_evidence_of_its_section():
 def test_the_answer_must_name_the_served_version_and_request():
     task = {"id": "t", "stop": ["answered"], "tools": ["predict"], "names_prediction": True}
     trace = [attempt(1, "predict", output=PREDICTION)]
-    assert agent_eval.check(task, [*trace, end(message="Model version 2, request r-1.")]) == []
-    for message in ("Model version 3, request r-1.", "Model version 2.", "Version 20, request r-1."):
+    for message in ("Model version 2, request r-1.", "The model version is 2 and the request ID is r-1.",
+                    "Model version: 2\nRequest ID: r-1"):  # the last two as written in a live run
+        assert agent_eval.check(task, [*trace, end(message=message)]) == []
+    for message in ("Model version 3, request r-1.", "Model version 2.", "Version 20, request r-1.",
+                    "Version 3 replaced 2, request r-1."):
         assert agent_eval.check(task, [*trace, end(message=message)]) == [
             "the answer does not name version 2 and request r-1"]
     assert agent_eval.check(task, [attempt(1, "predict", "error"), end()]) == ["no successful prediction"]

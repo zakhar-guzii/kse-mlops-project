@@ -106,7 +106,7 @@ The tiles are checked by the runner, because CI has no data.
 
   The refusals' `tools = []` together with `forbid = ["retrieve", "predict"]` means no attempt at all.
 - **Citation.** For each number in the end record's `sources`, the passage with that `n` in the trace's `retrieve` outputs, tested with `retrieval.relevant`.
-- **Prediction.** From the last successful `predict` output: `request_id` must be a substring of the message, and the message must match `version\s+<model_version>\b`, ignoring case. The registry is not read. Section 6.8 reports the version the worker recorded, and the alias may have moved.
+- **Prediction.** From the last successful `predict` output: `request_id` must be a substring of the message, and the message must match `\bversion\b[^0-9]{0,20}<model_version>\b`, ignoring case. That is the word "version", at most 20 characters without a digit, then the number. The first live run (task 3.1) wrote "The model version is 2" and "Model version: 2", which the earlier pattern `version\s+<model_version>\b` rejected; the digit-free gap still rejects "version 3" and "version 20". The registry is not read. Section 6.8 reports the version the worker recorded, and the alias may have moved.
 - **Top class.** The key with the largest value of `class_shares` must occur in the message, ignoring case.
 - **Judge.** After all tasks, `answer.judge_all` gets `{"id", "question": task, "answer": reference}` and the end records' messages. It uses the served `llm` (temperature 0) with `judge_max_tokens`, whatever the sampling of the run. A task that ended without `answered` is not judged; its stop check has failed already.
 
