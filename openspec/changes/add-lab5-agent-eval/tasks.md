@@ -46,7 +46,7 @@ Group 3 needs the cluster of `make cluster` with its port-forwards to `ml` (8000
   - with `ML_URL=http://127.0.0.1:1` (not ready);
   - with `make llm-server` stopped (ask the author first);
   - with `MLFLOW_TRACKING_URI` unset to the Compose default while the Compose stack is down. This last one must fail only after the last task, and the folder must keep 12 traces and `results.json`.
-- [ ] 3.2 Three runs on one commit:
+- [x] 3.2 Three runs on one commit:
   - `make agent-eval MLFLOW_TRACKING_URI=http://127.0.0.1:5002` twice;
   - `make agent-eval SAMPLING=card MLFLOW_TRACKING_URI=http://127.0.0.1:5002` once.
 
@@ -57,15 +57,15 @@ Group 3 needs the cluster of `make cluster` with its port-forwards to `ml` (8000
   - `landcover_requests_total{outcome="error"}` did not move.
 
   Record which tasks differ between runs and the first diverging step of each, from the traces.
-- [ ] 3.3 Evidence. Copy the three folders to `docs/traces/eval/<eval id>/`. Verify:
+- [x] 3.3 Evidence. Copy the three folders to `docs/traces/eval/<eval id>/`. Verify:
   - every trace there is valid JSON Lines with a run record, steps and an end record;
   - `grep -c '"mask"'` gives 0 for every file;
   - every trace's `task_set`, `prompt_hash` and commit agree with its `results.json`.
 
 ## 4. Documentation
 
-- [ ] 4.1 README: add the section "Lab 5: agent evaluation" after "Lab 5: agent" (design Decision 11) with what must be running, the three commands, the task file and the criteria, the table of the three runs, and the paragraph that explains their difference. Add the scorecard row "Agent traced and evaluated" with the measured pass rates. Verify every link in the section and the row resolves, and the numbers equal the three `results.json` files.
-- [ ] 4.2 Design document: revise Sections 5.4, 5.5, 6.4, 6.7, 6.9, 7.1, 7.2 and 7.4 as listed in Decision 11, in `docs/design.md` and the local `docs/design.uk.md`. Verify:
+- [x] 4.1 README: add the section "Lab 5: agent evaluation" after "Lab 5: agent" (design Decision 11) with what must be running, the three commands, the task file and the criteria, the table of the three runs, and the paragraph that explains their difference. Add the scorecard row "Agent traced and evaluated" with the measured pass rates. Verify every link in the section and the row resolves, and the numbers equal the three `results.json` files.
+- [x] 4.2 Design document: revise Sections 5.4, 5.5, 6.4, 6.7, 6.9, 7.1, 7.2 and 7.4 as listed in Decision 11, in `docs/design.md` and the local `docs/design.uk.md`. Verify:
   - Appendix 2 questions 5, 8, 9, 10 and 12 have their answer in the section the Decision 11 table names;
   - the figures in Sections 6.7 and 7.2 equal the three `results.json` files;
   - `git diff` leaves Sections 5.1 and 6.8 untouched;
@@ -73,7 +73,7 @@ Group 3 needs the cluster of `make cluster` with its port-forwards to `ml` (8000
 
 ## 5. Integration
 
-- [ ] 5.1 Integration check:
+- [x] 5.1 Integration check:
   - `openspec validate add-lab5-agent-eval --strict` passes;
   - `make lint` and `make test` pass on a clean tree;
   - the README section, Sections 5.4, 6.7 and 7.2 and the three `results.json` files agree on the pass rates, the means and the run IDs;

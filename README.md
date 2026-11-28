@@ -25,6 +25,7 @@ Lab 3 adds the GIS assistant's documentation answers: a versioned retrieval inde
 | Monitoring scheduled | A CronJob reports every 5 minutes: drift of the served window against the training reference per input feature and predicted class share, mean IoU on labelled quadrants, insufficient data and data age, pushed to Prometheus; the Grafana dashboard from the repository shows two windows ([Lab 4: monitoring](#lab-4-monitoring), [Two windows](#two-windows)). Prometheus evaluates five alert rules on the report, data and job freshness and service health, checked by `promtool` against synthetic series; Alertmanager emails every alert to the operator's mailbox in Mailpit ([Rules](#rules), [Channel](#channel), [Checking the rules](#checking-the-rules)) | Lab 4 |
 | One command brings the system up | `make cluster` from a clean clone starts Minikube, deploys every component, seeds the registry, passes a smoke request to `/predict` and deploys the monitoring and alerting components, with the mailbox address printed, in 7 minutes cold (396 s; slowest: data sample, images, registry seed) and 13 s repeated; a repeated run leaves Prometheus, Alertmanager and the mailbox untouched ([Bring-up](#bring-up)) | Lab 4 |
 | Drift signal reaches a human | `make drift-demo` darkens 64 of 128 held-out quadrants by 0.5 through `/predict` ([The shift](#the-shift)); the brightness distance goes from 0.322 to 0.631 against the threshold 0.5 on the dashboard, and `BrightnessDrift` lands in the operator's mailbox 5 min 46 s after the shifted window started, with the model unchanged ([Demonstration](#demonstration), [Grafana](docs/screenshots/grafana-drift-alert.png), [email](docs/screenshots/mailpit-drift-alert.png)) | Lab 4 |
+| Agent traced and evaluated | Every `make agent` run writes a trace with each step's input, output, tokens, seconds and shadow cost ([docs/traces/](docs/traces/): a combined task, a refusal, a spent budget). `make agent-eval` runs the 12 tasks of [eval/tasks.toml](eval/tasks.toml), each with a pass criterion a script checks from the trace. Two runs at the served temperature 0 passed 10 of 12, and two at the Gemma 4 model card sampling 9 of 12, at 1.6–1.8 tool attempts and about $0.010 of shadow cost per task. The difference is explained from the traces ([Lab 5: agent evaluation](#lab-5-agent-evaluation), [traces](docs/traces/eval/)) | Lab 5 |
 
 ## Lab 1 status
 
@@ -1354,3 +1355,63 @@ The first prompt told the model its budget of 4. In two runs out of two it stopp
 Each step costs its tokens at the Sonnet 5.5 shadow rates of `retrieval.toml` ($2 in, $10 out per million). The tools add no price of their own. The server reuses the conversation's prefix from the previous step, so a step evaluates only what was appended: in the budget trace 957 of the fifth call's 1,074 prompt tokens were cached.
 
 Agent predictions are served traffic: an `agent/` row counts in its drift window like `bench/` rows. Do not run the agent during `make drift-demo`, whose two distances are quoted above.
+
+## Lab 5: agent evaluation
+
+`make agent-eval` runs every task of [eval/tasks.toml](eval/tasks.toml) once through the agent of [Lab 5: agent](#lab-5-agent), with the same loop, tools and prompt as `make agent`. It then decides from each trace alone whether the task passed ([the check](src/landcover/agent_eval.py#L104)), writes `traces/eval-<id>/` with the twelve traces and `results.json`, and logs one run to the MLflow experiment `landcover-agent`. It needs what `make agent` needs, plus the MLflow port-forward. It refuses to start on a tree with uncommitted changes, with the text model server down, with a stale index, with the ML service not ready, or with a missing sample tile.
+
+```sh
+make agent-eval MLFLOW_TRACKING_URI=http://127.0.0.1:5002                 # served settings: temperature 0, seed 0
+make agent-eval SAMPLING=card MLFLOW_TRACKING_URI=http://127.0.0.1:5002   # Gemma 4 model card sampling
+```
+
+**The twelve tasks.**
+- 3 legend questions copied from the Lab 3 set (q01, q03, q04);
+- 1 question the corpus does not answer;
+- 1 prediction and 2 combined requests;
+- 2 operator actions to refuse;
+- 1 tile of the final batch;
+- 2 tasks whose tool fails on purpose: `predict` at `http://127.0.0.1:1`, and `retrieve` against a database on port 1.
+
+**What a task must satisfy.**
+- **Stop.** The expected stop reason.
+- **Tools.** The expected tools of its attempts, in order with the arguments ignored, or in any order for the combined requests, whose order the model chooses. No forbidden tool.
+- **Content checks:**
+  - a cited passage has the section and the evidence quote of the reference, the relevance rule of Lab 3;
+  - the answer names the `model_version` and `request_id` that `predict` returned in that run, so the registry is not read;
+  - the answer names the class with the largest share;
+  - every attempt of a failing tool has the expected status.
+- **Judge.** The four tasks with a reference answer also need the verdict `correct` from the Lab 3 judge, at temperature 0 in every run.
+
+The service answers at temperature 0 (design §5.2), so the served runs are deterministic apart from the request IDs. The `card` preset sends temperature 1.0, top-p 0.95 and top-k 64, the [Gemma 4 model card](https://ai.google.dev/gemma/docs/core/model_card_4.md) sampling, with a random seed per task recorded in the trace. It shows what sampling does to the pass rate. Cost is the shadow cost of the tokens, and beside it $0.01 per minute of run time, the rate design §6.8 states.
+
+### Results
+
+Commit `77cea88`, task set `6cbc757c8c32`, agent prompt `adacef81e0b9`, judge prompt `a11f648cb1f0`, index `5570e99ba60e`, `gemma-4-12b-it-qat-q4_0` on llama-server `b12359-b1b770d90`, budget 4, `champion` version 2 in a freshly built cluster. Means are per task, over all twelve, failures included.
+
+| Run | Sampling | Passed | Legend | Combined | Failure tasks | Tool attempts | Model calls | Tokens in / out | Seconds | Shadow cost | At $0.01/min | MLflow run | Traces |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | served | 10 of 12 (0.833) | 2 of 3 | 1 of 2 | 2 of 2 | 1.67 | 2.67 | 3,941 / 205 | 18.2 | $0.0099 | $0.0030 | `2fa29390` | [269bbeaf](docs/traces/eval/269bbeaf/) |
+| 2 | served | 10 of 12 (0.833) | 2 of 3 | 1 of 2 | 2 of 2 | 1.67 | 2.67 | 3,961 / 201 | 14.8 | $0.0099 | $0.0025 | `95a4ea08` | [1f2f3398](docs/traces/eval/1f2f3398/) |
+| 3 | card | 9 of 12 (0.750) | 1 of 3 | 1 of 2 | 2 of 2 | 1.83 | 2.83 | 4,042 / 218 | 43.1* | $0.0103 | $0.0072* | `1ed0e83e` | [06f1b74b](docs/traces/eval/06f1b74b/) |
+| 4 | card | 9 of 12 (0.750) | 2 of 3 | 1 of 2 | 1 of 2 | 1.58 | 2.58 | 3,858 / 207 | 15.2 | $0.0098 | $0.0025 | `30a3bd7b` | [40d57954](docs/traces/eval/40d57954/) |
+
+The prediction, the unanswerable question, both refusals and the tile of the final batch passed in every run.
+
+\* The Mac went to sleep twice during run 3 (`pmset`: 12:49 and 13:01). The traces' clock does not count the sleep, but after waking the model's pages were read back from disk, so four calls of t01–t04 took 50–92 s. Run 4 repeats the `card` run with the Mac kept awake; both are reported.
+
+Failed tasks: runs 1 and 2: t01, t07; run 3: t01, t03, t07; run 4: t01, t07, t12. No step named an action outside the allowlist (`not_allowed` 0), no call was a duplicate, and no task outside the two failure tasks spent its budget. The most attempts any other task used was 3.
+
+**Why the runs differ.**
+- **Runs 1 and 2 match.** They give the same result for every task, and 9 of the 12 traces are the same step for step, down to the cached prompt tokens.
+- **The three predicting tasks differ.** They diverge from the step after `predict`, because every prediction gets a new request ID and that ID enters the conversation. At temperature 0 a different prompt can still change the wording: t06 retrieved "what does the value 255 mean in the class mask" in run 1 and "… in the mask" in run 2, and t07 wrote "29.37%" in one run and "0.2937" in the other. The verdicts did not change.
+- **Retrieval is exact.** The same query returned the same chunks in every run.
+- **The sampled runs lose one task each, and not the same one.**
+  - Run 3: t03 answered "until the original upload expiry" without the 24 hours. The judge rejected it, and its cited passage lacks the evidence.
+  - Run 4: t03 passed, but t12 stopped with `cannot` after two retryable database errors instead of retrying. That is the failure the prompt's retry rule exists to prevent, and at temperature 0 it did not happen.
+  - t07 named the wrong class (building, 29%, against rangeland, 38%) in runs 1–3. In run 4 it named rangeland, but cited the OpenEarthMap class list instead of the service's legend, which its criterion requires.
+  - t10 ran past the 256 output tokens under sampling in both runs (`invalid_reply`) and still passed, because no request was sent.
+- **t01 fails in all four runs.** The passage with the legend row `| 0 | 1 | bareland |` was retrieved, but the model does not connect "bare soil" to bareland.
+- **What the trace columns show.** Temperature and seed are in each run record, the request ID in the `predict` output, the retrieved `chunk_id`s in each `retrieve` step, and the paging of run 3 in `model_s`. Run 3's cost per minute is almost three times that of run 4 while its token cost is 5% higher: the time columns show the change, and the token columns do not.
+
+The four folders are committed under [docs/traces/eval/](docs/traces/eval/): twelve traces and `results.json` each, with no mask in any trace. Agent predictions count in the drift window like `bench/` rows (3 per run). Do not run the evaluation during `make drift-demo`.
