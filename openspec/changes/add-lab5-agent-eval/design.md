@@ -174,7 +174,7 @@ Experiment `landcover-agent`. Run name `agent-eval-served` or `agent-eval-card`.
   - both shadow rates and the per-minute rate.
 - **Tags:** `git_commit`, `task_set` (the first 12 hex digits of the SHA-256 of `eval/tasks.toml`), `prompt_hash` (`agent.md`), `judge_prompt_hash`, `index_version`, `eval_id`.
 - **Metrics:** those of Decision 7.
-- **Artifacts:** `results.json`, and the folder of traces (`log_artifacts`, under `traces/`).
+- **Artifacts:** the run's folder as it is (`log_artifacts`): `results.json` and the twelve traces.
 
 If the tracking server cannot be reached, the command exits non-zero with `MLFLOW_TRACKING_URI`, and the folder keeps the traces and `results.json`. For the cluster the run uses `MLFLOW_TRACKING_URI=http://127.0.0.1:5002`; the README gives the full command.
 

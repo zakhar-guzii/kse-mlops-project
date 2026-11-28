@@ -14,7 +14,7 @@ Group 3 needs the cluster of `make cluster` with its port-forwards to `ml` (8000
 
 ## 1. Task set and checks
 
-- [ ] 1.1 Add `eval/tasks.toml` with the twelve tasks of design Decision 2 and the fields of Decision 1. Copy the text, reference answer and sources of q01–q05 from `eval/questions.toml` with `from`. In a new `src/landcover/agent_eval.py`, add `load_tasks` (the tasks and the 12-digit `task_set` hash) and the per-type validation. Add `tests/test_agent_eval.py` with the set tests of Decision 10:
+- [x] 1.1 Add `eval/tasks.toml` with the twelve tasks of design Decision 2 and the fields of Decision 1. Copy the text, reference answer and sources of q01–q05 from `eval/questions.toml` with `from`. In a new `src/landcover/agent_eval.py`, add `load_tasks` (the tasks and the 12-digit `task_set` hash) and the per-type validation. Add `tests/test_agent_eval.py` with the set tests of Decision 10:
   - at least ten tasks, unique ids, known types, stops and tools;
   - one `refusal` and one `fault`;
   - the per-type criteria;
@@ -22,11 +22,11 @@ Group 3 needs the cluster of `make cluster` with its port-forwards to `ml` (8000
   - a duplicated id or an unknown type makes the validation name the task.
 
   Verify `make test` and `make lint` pass.
-- [ ] 1.2 Add `check(task, records)` (Decision 3): attempts, the `in_order` and `any` tool checks, `forbid`, the citation check through `retrieval.relevant`, `names_prediction`, `names_top_class` and `statuses`. Extend the tests with the tool and content cases of Decision 10, using hand-written trace records. Verify `make test` passes.
+- [x] 1.2 Add `check(task, records)` (Decision 3): attempts, the `in_order` and `any` tool checks, `forbid`, the citation check through `retrieval.relevant`, `names_prediction`, `names_top_class` and `statuses`. Extend the tests with the tool and content cases of Decision 10, using hand-written trace records. Verify `make test` passes.
 
 ## 2. Runner
 
-- [ ] 2.1 Add the runner (Decision 5): the checks before the first task, the eval folder, one `agent.run` per task with its tools picked by `ml_url` and `dsn` (Decision 4), the sampling of Decision 6, the judge on the tasks with `reference` at the served settings, the metrics of Decision 7, and `results.json`. Add `main` and the Makefile target `agent-eval` (`--group rag`, `ML_URL`, `SAMPLING`). Extend the tests with a scripted model and fake tools:
+- [x] 2.1 Add the runner (Decision 5): the checks before the first task, the eval folder, one `agent.run` per task with its tools picked by `ml_url` and `dsn` (Decision 4), the sampling of Decision 6, the judge on the tasks with `reference` at the served settings, the metrics of Decision 7, and `results.json`. Add `main` and the Makefile target `agent-eval` (`--group rag`, `ML_URL`, `SAMPLING`). Extend the tests with a scripted model and fake tools:
   - one trace per task and one result row per task;
   - `card` gives temperature 1.0, top-p 0.95, top-k 64 and distinct seeds in the run records;
   - `served` sends no extra sampling fields;
@@ -37,7 +37,7 @@ Group 3 needs the cluster of `make cluster` with its port-forwards to `ml` (8000
   - a dirty tree raises before the first task.
 
   Verify `make test` and `make lint` pass.
-- [ ] 2.2 Add the MLflow logging of Decision 8, with `mlflow` imported after the last task. Add a test that importing `landcover.agent_eval` leaves `mlflow` unloaded, and one with the logging stubbed that checks the tags `git_commit`, `task_set`, `prompt_hash`, `judge_prompt_hash` and `index_version`. Verify `make test` passes and that `test_the_agent_does_not_load_the_registry_client` still passes.
+- [x] 2.2 Add the MLflow logging of Decision 8, with `mlflow` imported after the last task. Add a test that importing `landcover.agent_eval` leaves `mlflow` unloaded, and one with the logging stubbed that checks the tags `git_commit`, `task_set`, `prompt_hash`, `judge_prompt_hash` and `index_version`. Verify `make test` passes and that `test_the_agent_does_not_load_the_registry_client` still passes.
 
 ## 3. Live runs
 

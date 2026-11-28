@@ -1,4 +1,4 @@
-.PHONY: setup lint test up down airflow-password sample data pull-data train import register champion reproduce train-remote retrieval-index retrieval-eval llm-server answer-eval images cluster replay reference drift-demo agent
+.PHONY: setup lint test up down airflow-password sample data pull-data train import register champion reproduce train-remote retrieval-index retrieval-eval llm-server answer-eval images cluster replay reference drift-demo agent agent-eval
 
 # Credentials for DVC and Compose come from the untracked .env (see .env.example).
 -include .env
@@ -160,3 +160,10 @@ reference:
 # and the port-forwards of make cluster. ML_URL=http://127.0.0.1:1 makes every prediction fail (README, Lab 5: agent).
 agent:
 	uv run --locked --group rag python -m landcover.agent "$$TASK" --ml $(ML_URL)
+
+# Lab 5: run the tasks of eval/tasks.toml once through the agent on a clean tree, check each from its trace, write
+# traces/eval-<id>/ and log one run to the MLflow experiment landcover-agent. SAMPLING=card uses the Gemma 4 model card
+# sampling instead of retrieval.toml. For the cluster: MLFLOW_TRACKING_URI=http://127.0.0.1:5002 (README, Lab 5:
+# agent evaluation).
+agent-eval:
+	uv run --locked --group rag python -m landcover.agent_eval --ml $(ML_URL) $(if $(SAMPLING),--sampling $(SAMPLING))
